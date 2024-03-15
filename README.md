@@ -24,10 +24,10 @@ Support Matrix:
 
 Clone the qwen.cpp repository into your local machine:
 ```sh
-git clone --recursive https://github.com/QwenLM/qwen.cpp && cd qwen.cpp
+git clone --recursive https://github.com/yvonwin/qwen2.cpp && cd qwen2.cpp
 ```
 
-If you forgot the `--recursive` flag when cloning the repository, run the following command in the `qwen.cpp` folder:
+If you forgot the `--recursive` flag when cloning the repository, run the following command in the `qwen2.cpp` folder:
 ```sh
 git submodule update --init --recursive
 ```
