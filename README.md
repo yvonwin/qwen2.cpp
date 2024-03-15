@@ -1,6 +1,6 @@
-# qwen.cpp
+# qwen2.cpp
 
-C++ implementation of [Qwen-LM](https://github.com/QwenLM/Qwen) for real-time chatting on your MacBook.
+Unofficial C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5) for real-time chatting on your MacBook.
 
 ## Updates
 - **`2023/12/05`** qwen was merged to [llama.cpp](https://github.com/ggerganov/llama.cpp/pull/4281) and supports gguf format.
@@ -16,7 +16,7 @@ Highlights:
 Support Matrix:
 * Hardwares: x86/arm CPU, NVIDIA GPU
 * Platforms: Linux, MacOS
-* Models: [Qwen-LM](https://github.com/QwenLM/Qwen)
+* Models: [Qwen1.5](https://github.com/QwenLM/Qwen1.5)
 
 ## Getting Started
 
@@ -38,12 +38,14 @@ Download the qwen.tiktoken file from [Hugging Face](https://huggingface.co/Qwen/
 
 Use `convert.py` to transform Qwen-LM into quantized GGML format. For example, to convert the fp16 original model to q4_0 (quantized int4) GGML model, run:
 ```sh
-python3 qwen_cpp/convert.py -i Qwen/Qwen-7B-Chat -t q4_0 -o qwen7b-ggml.bin
+python3 qwen_cpp/convert.py -i Qwen/Qwen1.5-0.5B-Chat -t q4_0 -o qwen2_0.5b-ggml.bin
 ```
 
 The original model (`-i <model_name_or_path>`) can be a HuggingFace model name or a local path to your pre-downloaded model. Currently supported models are:
-* Qwen-7B: `Qwen/Qwen-7B-Chat`
-* Qwen-14B: `Qwen/Qwen-14B-Chat`
+* Qwen1.5-0.5B: `Qwen/Qwen1.5-0.5B-Chat`
+* Qwen1.5-1.8B: `Qwen/Qwen1.5-1.8B`
+* Qwen1.5-7B: `Qwen/Qwen1.5-7B-Chat`
+...
 
 You are free to try any of the below quantization types by specifying `-t <type>`:
 * `q4_0`: 4-bit integer quantization with fp16 scales.
@@ -64,13 +66,13 @@ cmake --build build -j --config Release
 
 Now you may chat with the quantized Qwen-7B-Chat model by running:
 ```sh
-./build/bin/main -m qwen7b-ggml.bin --tiktoken Qwen-7B-Chat/qwen.tiktoken -p 你好
-# 你好！很高兴为你提供帮助。
+./build/bin/main -m qwen2_0.5b-ggml.bin  -p 你想活出怎样的人生
+# 作为一个人工智能，我没有生命，也没有个人的人生目标。我的目标是帮助用户解决问题，提供有用的信息，以及与用户进行有效的交流。
 ```
 
 To run the model in interactive mode, add the `-i` flag. For example:
 ```sh
-./build/bin/main -m qwen7b-ggml.bin --tiktoken Qwen-7B-Chat/qwen.tiktoken -i
+./build/bin/main -m qwen2_0.5b-ggml.bin  -i
 ```
 In interactive mode, your chat history will serve as the context for the next-round conversation.
 
@@ -152,4 +154,4 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 
 ## Acknowledgements
 
-* This project is greatly inspired by [llama.cpp](https://github.com/ggerganov/llama.cpp), [chatglm.cpp](https://github.com/li-plus/chatglm.cpp), [ggml](https://github.com/ggerganov/ggml), [tiktoken](https://github.com/openai/tiktoken), [tokenizer](https://github.com/sewenew/tokenizer), [cpp-base64](https://github.com/ReneNyffenegger/cpp-base64), [re2](https://github.com/google/re2) and [unordered_dense](https://github.com/martinus/unordered_dense).
+* This project is greatly inspired by [qwen.cpp](https://github.com/QwenLM/qwen.cpp) [llama.cpp](https://github.com/ggerganov/llama.cpp), [chatglm.cpp](https://github.com/li-plus/chatglm.cpp), [ggml](https://github.com/ggerganov/ggml), [tiktoken](https://github.com/openai/tiktoken), [tokenizer](https://github.com/sewenew/tokenizer), [cpp-base64](https://github.com/ReneNyffenegger/cpp-base64), [re2](https://github.com/google/re2) and [unordered_dense](https://github.com/martinus/unordered_dense).

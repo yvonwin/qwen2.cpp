@@ -220,6 +220,54 @@ class QwenConverter:
         ]
         dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
 
+class Qwen2Converter:
+    @classmethod
+    def convert(cls, f, model, tokenizer, ggml_type):
+        f.write(b"ggml")  # magic
+        cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type)
+        cls.dump_model(f, model, ggml_type)
+
+    @staticmethod
+    def dump_config(f, config, generation_config, tokenizer, ggml_type):
+        config_values = [
+            ggml_type.value,
+            config.vocab_size,
+            config.hidden_size,
+            config.num_attention_heads,
+            config.num_key_value_heads,
+            config.num_hidden_layers,
+            config.intermediate_size,
+            tokenizer.model_max_length, # 32000 tmp test 
+            config.eos_token_id,
+            list(tokenizer.added_tokens_decoder.keys())[0], 
+            list(tokenizer.added_tokens_decoder.keys())[1],
+            list(tokenizer.added_tokens_decoder.keys())[2],
+        ]
+        f.write(struct.pack("i" * len(config_values), *config_values))
+
+    @staticmethod
+    def dump_model(f, model, ggml_type):
+        weight_names = ["model.embed_tokens.weight"]
+        for i in range(model.config.num_hidden_layers):
+            weight_names += [
+                f"model.layers.{i}.input_layernorm.weight",
+                f"model.layers.{i}.self_attn.q_proj.weight",
+                f"model.layers.{i}.self_attn.q_proj.bias",
+                f"model.layers.{i}.self_attn.k_proj.weight",
+                f"model.layers.{i}.self_attn.k_proj.bias",
+                f"model.layers.{i}.self_attn.v_proj.weight",
+                f"model.layers.{i}.self_attn.v_proj.bias",
+                f"model.layers.{i}.self_attn.o_proj.weight",
+                f"model.layers.{i}.post_attention_layernorm.weight",
+                f"model.layers.{i}.mlp.gate_proj.weight",
+                f"model.layers.{i}.mlp.up_proj.weight",
+                f"model.layers.{i}.mlp.down_proj.weight",
+            ]
+        weight_names += [
+            "model.norm.weight",
+            "lm_head.weight",
+        ]
+        dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
 
 def convert(f: BinaryIO, model_name_or_path: str, dtype: str = "q4_0"):
     ggml_type = GGMLType[dtype.upper()]
@@ -227,7 +275,22 @@ def convert(f: BinaryIO, model_name_or_path: str, dtype: str = "q4_0"):
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True)
 
-    QwenConverter.convert(f, model, tokenizer, ggml_type)
+    # print(model)
+    # state_dict = model.state_dict()
+    # keys = state_dict.keys()
+    # print(keys)
+    # print(state_dict)
+
+    # print(model.generation_config)
+    # print(tokenizer.model_max_length)
+    # print(list(tokenizer.added_tokens_decoder.keys())) # 1.5 only
+
+    if "1.5" in model_name_or_path:
+        print('Convert Qwen')
+        Qwen2Converter.convert(f, model, tokenizer, ggml_type)
+    else:
+        print('Convert Qwen1.5')
+        QwenConverter.convert(f, model, tokenizer, ggml_type)
 
 
 def main():
@@ -235,12 +298,12 @@ def main():
     parser.add_argument(
         "-i",
         "--model_name_or_path",
-        default="Qwen/Qwen-7B-Chat",
+        default="Qwen/Qwen1.5-0.5B-Chat", # or Qwen/Qwen-1_8B-Chat, Qwen/Qwen1.5-0.5B-Chat
         type=str,
         help="Model name or path used in AutoModel.from_pretrained",
     )
     parser.add_argument(
-        "-o", "--save_path", default="qwen7b-ggml.bin", type=Path, help="Path to save the generated GGML model"
+        "-o", "--save_path", default="qwen2_0.5b-ggml.bin", type=Path, help="Path to save the generated GGML model"
     )
     parser.add_argument(
         "-t",

@@ -320,8 +320,10 @@ class QwenAttention {
 
     int num_attention_heads;
     int num_kv_heads;
-    Linear c_attn;
-    Linear c_proj;
+    Linear q_proj;
+    Linear k_proj;
+    Linear v_proj;
+    Linear o_proj;
     ggml_tensor *k_cache; // [n_head, maxlen, head_size]
     ggml_tensor *v_cache; // [n_head, head_size, maxlen]
 };
@@ -330,31 +332,31 @@ class QwenMLP {
   public:
     QwenMLP() = default;
     QwenMLP(ModelContext * ctx, int hidden_size, int intermediate_size)
-      : w1(ctx, hidden_size, intermediate_size / 2, false),
-        w2(ctx, hidden_size, intermediate_size / 2, false),
-        c_proj(ctx, intermediate_size / 2, hidden_size, false) {}
+      : gate_proj(ctx, hidden_size, intermediate_size, false),
+        up_proj(ctx, hidden_size, intermediate_size, false),
+        down_proj(ctx, intermediate_size, hidden_size, false) {}
 
     auto forward(ModelContext *ctx, ggml_tensor *hidden_states) const -> ggml_tensor *;
 
-    Linear w1;
-    Linear w2;
-    Linear c_proj;
+    Linear gate_proj;
+    Linear up_proj;
+    Linear down_proj;
 };
 
 class QwenBlock {
   public:
     QwenBlock() = default;
     QwenBlock(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int intermediate_size, int max_length)
-      : ln_1(ctx, hidden_size, false),
+      : input_layernorm(ctx, hidden_size, false),
         attn(ctx, hidden_size, num_attention_heads, num_kv_heads, max_length),
-        ln_2(ctx, hidden_size, false),
+        post_attention_layernorm(ctx, hidden_size, false),
         mlp(ctx, hidden_size, intermediate_size) {}
 
     auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor *;
 
-    RMSNorm ln_1;
+    RMSNorm input_layernorm;
     QwenAttention attn;
-    RMSNorm ln_2;
+    RMSNorm post_attention_layernorm;
     QwenMLP mlp;
 };
 
@@ -365,9 +367,9 @@ class QwenModel {
 
     auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor *;
 
-    Embedding wte;
+    Embedding embed_tokens;
     std::vector<QwenBlock> layers;
-    RMSNorm ln_f;
+    RMSNorm norm;
 };
 
 class QwenForCausalLM {
@@ -402,7 +404,7 @@ class QwenForCausalLM {
 
     auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor *;
 
-    static constexpr size_t MEM_SIZE     = 512 * MB;  // 2k context
+    static constexpr size_t MEM_SIZE     = 1280 * MB;  // 2k context
     static constexpr size_t SCRATCH_SIZE = 1280 * MB; // 2k context
 
     QwenConfig config;

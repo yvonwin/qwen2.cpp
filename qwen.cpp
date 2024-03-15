@@ -314,7 +314,6 @@ QwenTokenizer::QwenTokenizer(const std::string & tiktoken_path, const QwenConfig
 
 auto QwenTokenizer::build_prompt(const std::vector<std::string> &history) const -> std::string {
   QWEN_CHECK(history.size() % 2 == 1) << "invalid history size " << history.size();
-
   std::ostringstream oss_prompt;
   oss_prompt << "<|im_start|>system\nYou are a helpful assistant.<|im_end|>";
   for (size_t i = 0; i < history.size() - 1; i += 2) {
@@ -355,7 +354,10 @@ auto QwenTokenizer::is_special_id(int id) const -> bool {
 
 QwenAttention::QwenAttention(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int max_length)
   : num_attention_heads(num_attention_heads), num_kv_heads(num_kv_heads),
-    c_attn(ctx, hidden_size, 3 * hidden_size), c_proj(ctx, hidden_size, hidden_size, false),
+    q_proj(ctx, hidden_size, hidden_size), 
+    k_proj(ctx, hidden_size, hidden_size), 
+    v_proj(ctx, hidden_size, hidden_size),
+    o_proj(ctx, hidden_size, hidden_size, false),
     k_cache(ggml_new_tensor_3d(ctx->ctx_kv.get(), GGML_TYPE_F16, hidden_size / num_attention_heads, max_length,
                                num_kv_heads)),
     v_cache(ggml_new_tensor_3d(ctx->ctx_kv.get(), GGML_TYPE_F16, max_length, hidden_size / num_attention_heads,
@@ -370,10 +372,18 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
   const int rope_dim = head_size;
   const int n_past = static_cast<int *>(KQ_pos->data)[0];
 
-  ggml_tensor *qkv = c_attn.forward(ctx, hidden_states); // [qlen, hidden + 2 * kv_hidden]
-  ggml_tensor *query_layer =
-    ggml_view_3d(gctx, qkv, head_size, num_attention_heads, qlen, head_size * ggml_element_size(qkv), qkv->nb[1],
-                 0); // [qlen, heads, head_size]
+  ggml_tensor *q = q_proj.forward(ctx, hidden_states); // [qlen, hidden]
+  // [qlen, heads, head_size]
+  ggml_tensor *query_layer = ggml_view_3d(gctx, q, head_size, num_attention_heads, qlen, head_size * ggml_element_size(q), q->nb[1], 0);
+  ggml_tensor *k = k_proj.forward(ctx, hidden_states); // [qlen, kv_hidden]
+  // [qlen, kv_heads, head_size]
+  ggml_tensor *key_layer = ggml_view_3d(gctx, k, head_size, num_kv_heads, qlen, head_size * ggml_element_size(k), k->nb[1], 0);
+
+  ggml_tensor *v = v_proj.forward(ctx, hidden_states); // [qlen, kv_hidden]
+  ggml_tensor *value_layer = ggml_view_3d(gctx, v, head_size, num_kv_heads, qlen, head_size * ggml_element_size(v), v->nb[1], 0);
+
+  // std::cout<<"hello there"<<std::endl; //passed
+
 #ifdef GGML_USE_CUBLAS
   if (!ggml_is_contiguous(query_layer)) {
     query_layer = tensor_assign_buffers(ggml_cont(gctx, query_layer));
@@ -382,20 +392,14 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
   query_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx));
   query_layer = tensor_assign_buffers(ggml_cont(gctx, ggml_permute(gctx, query_layer, 0, 2, 1, 3))); // [heads, qlen, head_size]
 
-  ggml_tensor *key_layer =
-    ggml_view_3d(gctx, qkv, head_size, num_kv_heads, qlen, head_size * ggml_element_size(qkv), qkv->nb[1],
-                 hidden_size * ggml_element_size(qkv)); // [qlen, kv_heads, head_size]
 #ifdef GGML_USE_CUBLAS
   if (!ggml_is_contiguous(key_layer)) {
     key_layer = tensor_assign_buffers(ggml_cont(gctx, key_layer));
   }
 #endif
   key_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, key_layer, KQ_pos, rope_dim, 2, n_ctx));
-  key_layer = tensor_assign_buffers(ggml_permute(gctx, key_layer, 0, 2, 1, 3)); // [kv_heads, qlen, head_size]
 
-  ggml_tensor *value_layer =
-    ggml_view_3d(gctx, qkv, head_size, num_kv_heads, qlen, head_size * ggml_element_size(qkv), qkv->nb[1],
-                 (hidden_size + head_size * num_kv_heads) * ggml_element_size(qkv)); // [qlen, kv_heads, head_size]
+  key_layer = tensor_assign_buffers(ggml_permute(gctx, key_layer, 0, 2, 1, 3)); // [kv_heads, qlen, head_size]
   value_layer = tensor_assign_buffers(ggml_permute(gctx, value_layer, 1, 2, 0, 3)); // [kv_heads, head_size, qlen]
 
   // store key & value to cache
@@ -435,19 +439,19 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
   context_layer = tensor_assign_buffers(
     ggml_reshape_2d(gctx, context_layer, hidden_size, qlen)); // [qlen, hidden]
 
-  ggml_tensor *attn_output = c_proj.forward(ctx, context_layer);
+  ggml_tensor *attn_output = o_proj.forward(ctx, context_layer);
   return attn_output;
 }
 
 auto QwenMLP::forward(ModelContext *ctx, ggml_tensor *hidden_states) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
 
-  ggml_tensor *a2 = w2.forward(ctx, hidden_states);
+  ggml_tensor *a2 = gate_proj.forward(ctx, hidden_states);
   a2 = tensor_assign_buffers(ggml_silu_inplace(gctx, a2));
-  ggml_tensor *a1 = w1.forward(ctx, hidden_states);
+  ggml_tensor *a1 = up_proj.forward(ctx, hidden_states);
 
   ggml_tensor *output = tensor_assign_buffers(ggml_mul_inplace(gctx, a2, a1));
-  output = c_proj.forward(ctx, output);
+  output = down_proj.forward(ctx, output);
   return output;
 }
 
@@ -455,12 +459,12 @@ auto QwenBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tens
   ggml_context *gctx = ctx->ctx_b.get();
 
   ggml_tensor *residual = hidden_states;
-  hidden_states = ln_1.forward(ctx, hidden_states, 1e-6f);
-  hidden_states = attn.forward(ctx, hidden_states, KQ_pos, n_ctx);
+  hidden_states = input_layernorm.forward(ctx, hidden_states, 1e-6f);
+  hidden_states = attn.forward(ctx, hidden_states, KQ_pos, n_ctx); // FAILE HERE  a->ne[2] == b->ne[0]
   hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
 
   residual = hidden_states;
-  hidden_states = ln_2.forward(ctx, hidden_states, 1e-6f);
+  hidden_states = post_attention_layernorm.forward(ctx, hidden_states, 1e-6f);
   hidden_states = mlp.forward(ctx, hidden_states);
   hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
 
@@ -468,7 +472,7 @@ auto QwenBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tens
 }
 
 QwenModel::QwenModel(ModelContext *ctx, const QwenConfig &config)
-  : wte(ctx, config.vocab_size, config.hidden_size), ln_f(ctx, config.hidden_size) {
+  : embed_tokens(ctx, config.vocab_size, config.hidden_size), norm(ctx, config.hidden_size) {
   layers.reserve(config.num_hidden_layers);
   for (int layer_id = 0; layer_id < config.num_hidden_layers; layer_id++) {
     layers.emplace_back(ctx, config.hidden_size, config.num_attention_heads, config.num_kv_heads,
@@ -478,14 +482,14 @@ QwenModel::QwenModel(ModelContext *ctx, const QwenConfig &config)
 
 auto QwenModel::forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
-  ggml_tensor *hidden_states = wte.forward(ctx, input_ids);
+  ggml_tensor *hidden_states = embed_tokens.forward(ctx, input_ids);
   for (const auto &layer : layers) {
     ggml_set_scratch(gctx, ctx->scratch);
     hidden_states = layer.forward(ctx, hidden_states, KQ_pos, n_ctx);
   }
   ggml_scratch empty_scratch = {0, 0, nullptr};
   ggml_set_scratch(gctx, empty_scratch);
-  hidden_states = ln_f.forward(ctx, hidden_states, 1e-6f);
+  hidden_states = norm.forward(ctx, hidden_states, 1e-6f);
   return hidden_states;
 }
 
@@ -512,7 +516,7 @@ QwenForCausalLM::QwenForCausalLM(const QwenConfig &config)
   ggml_cuda_set_scratch_size(SCRATCH_SIZE);
 #endif
   constexpr size_t tensor_ovhd = GGML_TENSOR_SIZE + GGML_OBJECT_SIZE;
-  const size_t ctx_w_size = (3 + config.num_hidden_layers * 8) * tensor_ovhd;
+  const size_t ctx_w_size = (3 + config.num_hidden_layers * 12) * tensor_ovhd;
   const size_t ctx_kv_size = 2 * config.num_hidden_layers *
                              (config.max_length * config.hidden_size / config.num_attention_heads * config.num_kv_heads * ggml_type_size(GGML_TYPE_F16) + tensor_ovhd);
   ctx_.dtype = config.dtype;
@@ -525,27 +529,40 @@ QwenForCausalLM::QwenForCausalLM(const QwenConfig &config)
   QWEN_CHECK(ggml_used_mem(ctx_.ctx_kv.get()) == ctx_kv_size) << "corrupted kv cache";
 
   // build state_dict
-  state_dict_.reserve(3 + config.num_hidden_layers * 8);
-  state_dict_.emplace_back("transformer.wte.weight", transformer.wte.weight);
+  state_dict_.reserve(3 + config.num_hidden_layers * 12);
+  state_dict_.emplace_back("model.embed_tokens.weight", transformer.embed_tokens.weight);
   for (int i = 0; i < config.num_hidden_layers; i++) {
-    std::string layer_prefix = "transformer.h." + std::to_string(i) + '.';
-    state_dict_.emplace_back(layer_prefix + "ln_1.weight", transformer.layers[i].ln_1.weight);
-    state_dict_.emplace_back(layer_prefix + "attn.c_attn.weight",
-                             transformer.layers[i].attn.c_attn.weight);
-    state_dict_.emplace_back(layer_prefix + "attn.c_attn.bias",
-                             transformer.layers[i].attn.c_attn.bias);
-    state_dict_.emplace_back(layer_prefix + "attn.c_proj.weight",
-                             transformer.layers[i].attn.c_proj.weight);
-    state_dict_.emplace_back(layer_prefix + "ln_2.weight",
-                             transformer.layers[i].ln_2.weight);
-    state_dict_.emplace_back(layer_prefix + "mlp.w1.weight",
-                             transformer.layers[i].mlp.w1.weight);
-    state_dict_.emplace_back(layer_prefix + "mlp.w2.weight",
-                             transformer.layers[i].mlp.w2.weight);
-    state_dict_.emplace_back(layer_prefix + "mlp.c_proj.weight",
-                             transformer.layers[i].mlp.c_proj.weight);
+    std::string layer_prefix = "model.layers." + std::to_string(i) + '.';
+    state_dict_.emplace_back(layer_prefix + "input_layernorm.weight", transformer.layers[i].input_layernorm.weight);
+    
+    state_dict_.emplace_back(layer_prefix + "self_attn.q_proj.weight",
+                             transformer.layers[i].attn.q_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "self_attn.q_proj.bias",
+                             transformer.layers[i].attn.q_proj.bias);
+
+    state_dict_.emplace_back(layer_prefix + "self_attn.k_proj.weight",
+                             transformer.layers[i].attn.k_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "self_attn.k_proj.bias",
+                             transformer.layers[i].attn.k_proj.bias);
+
+    state_dict_.emplace_back(layer_prefix + "self_attn.v_proj.weight",
+                             transformer.layers[i].attn.v_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "self_attn.v_proj.bias",
+                             transformer.layers[i].attn.v_proj.bias);
+
+    state_dict_.emplace_back(layer_prefix + "self_attn.o_proj.weight",
+                             transformer.layers[i].attn.o_proj.weight);
+
+    state_dict_.emplace_back(layer_prefix + "post_attention_layernorm.weight",
+                             transformer.layers[i].post_attention_layernorm.weight);
+    state_dict_.emplace_back(layer_prefix + "mlp.gate_proj.weight",
+                             transformer.layers[i].mlp.gate_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "mlp.up_proj.weight",
+                             transformer.layers[i].mlp.up_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "mlp.down_proj.weight",
+                             transformer.layers[i].mlp.down_proj.weight);
   }
-  state_dict_.emplace_back("transformer.ln_f.weight", transformer.ln_f.weight);
+  state_dict_.emplace_back("model.norm.weight", transformer.norm.weight);
   state_dict_.emplace_back("lm_head.weight", lm_head.weight);
 }
 
@@ -770,7 +787,7 @@ auto QwenForCausalLM::load(ModelLoader &loader) -> void {
     const std::string &name = item.first;
     ggml_tensor *tensor = item.second;
     loader.read_tensor(name, tensor);
-    if (name != "transformer.wte.weight") {
+    if (name != "model.embed_tokens.weight") {
       tensor_to_device(tensor);
     }
   }
