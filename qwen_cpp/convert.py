@@ -224,7 +224,7 @@ class Qwen2Converter:
     @classmethod
     def convert(cls, f, model, tokenizer, ggml_type):
         f.write(b"ggml")  # magic
-        cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type)
+        cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type) # generation_config is not use now.
         cls.dump_model(f, model, ggml_type)
 
     @staticmethod
@@ -238,10 +238,10 @@ class Qwen2Converter:
             config.num_hidden_layers,
             config.intermediate_size,
             tokenizer.model_max_length, # 32000 tmp test 
-            config.eos_token_id,
-            list(tokenizer.added_tokens_decoder.keys())[0], 
-            list(tokenizer.added_tokens_decoder.keys())[1],
-            list(tokenizer.added_tokens_decoder.keys())[2],
+            config.eos_token_id,                             # eos 151645
+            list(tokenizer.added_tokens_decoder.keys())[0], # pad 151643
+            list(tokenizer.added_tokens_decoder.keys())[1], # im_start 151644
+            list(tokenizer.added_tokens_decoder.keys())[2], # im_end 151645
         ]
         f.write(struct.pack("i" * len(config_values), *config_values))
 
@@ -281,6 +281,7 @@ def convert(f: BinaryIO, model_name_or_path: str, dtype: str = "q4_0"):
     # print(keys)
     # print(state_dict)
 
+    # print(model.config.eos_token_id) # 151645
     # print(model.generation_config)
     # print(tokenizer.model_max_length)
     # print(list(tokenizer.added_tokens_decoder.keys())) # 1.5 only
