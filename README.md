@@ -3,7 +3,7 @@
 Unofficial C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5) for real-time chatting on your MacBook.
 
 ## Updates
-- **`2023/12/05`** qwen was merged to [llama.cpp](https://github.com/ggerganov/llama.cpp/pull/4281) and supports gguf format.
+- **`2023/03/26`**  Update Qwen1.5. Basic functionality has been successfully ported. 
 
 ## Features
 
@@ -120,6 +120,12 @@ pip install git+https://github.com/QwenLM/qwen.cpp.git@master
 pip install .
 ```
 
+Python Binding example.
+
+```sh
+python example.py
+```
+
 ## tiktoken.cpp
 
 We provide pure C++ tiktoken implementation. After installation, the usage is the same as openai tiktoken:
@@ -140,6 +146,13 @@ RAYON_NUM_THREADS=1 python benchmark.py
 ## Development
 
 **Unit Test**
+
+prepare test data.
+
+```sh
+cd tests 
+python test_convert.py
+```
 
 To perform unit tests, add this CMake flag `-DQWEN_ENABLE_TESTING=ON` to enable testing. Recompile and run the unit test (including benchmark).
 ```sh
