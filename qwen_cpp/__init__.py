@@ -94,7 +94,13 @@ class Pipeline(_C.Pipeline):
             input_ids.append(next_token_id)
 
             token_cache.append(next_token_id)
-            output = self.tokenizer.decode(token_cache)
+            try:   # https://github.com/QwenLM/qwen.cpp/issues/36
+                output = self.tokenizer.decode(token_cache)
+            except:
+                if output:
+                    pass
+                else:
+                    output = ''
 
             if output.endswith("\n"):
                 yield output[print_len:]
@@ -112,7 +118,6 @@ class Pipeline(_C.Pipeline):
                 self.model.config.im_end_id,
             ):
                 break
-
         output = self.tokenizer.decode(token_cache)
         yield output[print_len:]
 
