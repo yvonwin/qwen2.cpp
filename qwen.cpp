@@ -295,7 +295,7 @@ QwenTokenizer::QwenTokenizer(const std::string & tiktoken_path, const QwenConfig
 
   std::vector<std::string> special_tokens_s{"<|endoftext|>", "<|im_start|>", "<|im_end|>"};
   char buffer[14];
-  for (size_t i = 0; i < 205; i++) {
+  for (size_t i = 0; i < 205; i++) { // 205 for extra control token
     snprintf(buffer, 14, "<|extra_%zu|>", i);
     special_tokens_s.push_back(buffer);
   }
@@ -317,7 +317,8 @@ auto QwenTokenizer::build_prompt(const std::vector<std::string> &history) const 
   std::ostringstream oss_prompt;
   oss_prompt << "<|im_start|>system\nYou are a helpful assistant.<|im_end|>";
   for (size_t i = 0; i < history.size() - 1; i += 2) {
-    oss_prompt << "\n<|im_start|>user\n" << history[i] << "<|im_end|>\n<|im_start|>" << history[i + 1] << "<|im_end|>";
+    // oss_prompt << "\n<|im_start|>user\n" << history[i] << "<|im_end|>\n<|im_start|>" << history[i + 1] << "<|im_end|>";
+    oss_prompt << "\n<|im_start|>user\n" << history[i] << "<|im_end|>\n<|im_start|>assistant" << history[i + 1] << "<|im_end|>";
   }
   oss_prompt << "\n<|im_start|>user\n" << history.back() <<  "<|im_end|>\n<|im_start|>assistant\n";
 
