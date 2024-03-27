@@ -114,14 +114,12 @@ class Pipeline(_C.Pipeline):
                 break
     
     def _safe_decode(self, token_cache):
+        output = ''
         # Temporary solution. https://github.com/QwenLM/qwen.cpp/issues/36
         try:   
             output = self.tokenizer.decode(token_cache)
         except:
-            if output:
-                pass
-            else:
-                output = ''
+            pass
         return output
 
     def _stream_chat(self, input_ids: List[int], gen_config: _C.GenerationConfig) -> Iterator[DeltaMessage]:
