@@ -17,7 +17,9 @@ struct Args {
   std::string model_path = "qwen-ggml.bin";
   std::string tiktoken_path = "qwen.tiktoken";
   InferenceMode mode = INFERENCE_MODE_CHAT;
+  bool sync = false;
   std::string prompt = "你好";
+  std::string system = "You are a helpful assistant.";
   int max_length = 2048;
   int max_context_length = 512;
   bool interactive = false;
@@ -66,7 +68,9 @@ static auto parse_args(const std::vector<std::string> &argv) -> Args {
       args.mode = to_inference_mode(argv[++i]);
     } else if (arg == "-p" || arg == "--prompt") {
       args.prompt = argv[++i];
-    } else if (arg == "-i" || arg == "--interactive") {
+    }else if (arg == "-s" || arg == "--system") {
+      args.system = argv[++i];
+    }else if (arg == "-i" || arg == "--interactive") {
       args.interactive = true;
     } else if (arg == "-l" || arg == "--max_length") {
       args.max_length = std::stoi(argv[++i]);
@@ -109,6 +113,10 @@ static auto get_utf8_line(std::string &line) -> bool {
   return !!std::getline(std::cin, line);
 }
 
+static inline void print_message(const qwen::ChatMessage &message) {
+    std::cout << message.content << "\n";
+}
+
 static auto chat(Args &args) -> void {
   ggml_time_init();
   int64_t start_load_us = ggml_time_us();
@@ -119,8 +127,11 @@ static auto chat(Args &args) -> void {
 
   auto text_streamer = std::make_shared<qwen::TextStreamer>(std::cout, pipeline.tokenizer.get());
   auto perf_streamer = std::make_shared<qwen::PerfStreamer>();
-  auto streamer = std::make_shared<qwen::StreamerGroup>(
-    std::vector<std::shared_ptr<qwen::BaseStreamer>>{text_streamer, perf_streamer});
+  std::vector<std::shared_ptr<qwen::BaseStreamer>> streamers{perf_streamer};
+  if (!args.sync) {
+      streamers.emplace_back(text_streamer);
+  }
+  auto streamer = std::make_unique<qwen::StreamerGroup>(std::move(streamers));
 
   qwen::GenerationConfig gen_config(args.max_length, args.max_context_length, args.temp > 0, args.top_k,
                                     args.top_p, args.temp, args.repeat_penalty, args.num_threads);
@@ -161,6 +172,11 @@ static auto chat(Args &args) -> void {
     args.interactive = false;
   }
 
+    std::vector<qwen::ChatMessage> system_messages;
+    if (!args.system.empty()) {
+        system_messages.emplace_back(qwen::ChatMessage::ROLE_SYSTEM, args.system);
+    }
+
   if (args.interactive) {
     std::cout << R"( _____                                                      )" << '\n'
               << R"(|  _  |                                                     )" << '\n'
@@ -176,10 +192,22 @@ static auto chat(Args &args) -> void {
         << "Welcome to Qwen.cpp! Ask whatever you want. Type 'clear' to clear context. Type 'stop' to exit.\n"
         << "\n";
 
-    std::vector<std::string> history;
+    std::vector<qwen::ChatMessage> messages = system_messages;
+    if (!args.system.empty()) {
+        std::cout << std::setw(model_name.size()) << std::left << "System"
+                  << " > " << args.system << std::endl;
+    }
+
     while (1) {
-      std::cout << std::setw(model_name.size()) << std::left << "Prompt"
-                << " > " << std::flush;
+      std::string role;
+      if (messages.empty()){
+          role = qwen::ChatMessage::ROLE_USER;
+      }
+      else{
+          role = qwen::ChatMessage::ROLE_ASSISTANT;
+      }
+      
+
       std::string prompt;
       if (!get_utf8_line(prompt) || prompt == "stop") {
         break;
@@ -188,13 +216,16 @@ static auto chat(Args &args) -> void {
         continue;
       }
       if (prompt == "clear") {
-        history.clear();
+        messages = system_messages;
         continue;
       }
-      history.emplace_back(std::move(prompt));
+      messages.emplace_back(std::move(role), std::move(prompt));
       std::cout << model_name << " > ";
-      std::string output = pipeline.chat(history, gen_config, streamer.get());
-      history.emplace_back(std::move(output));
+      qwen::ChatMessage output = pipeline.chat(messages, gen_config, streamer.get());
+      if (args.sync) {
+          print_message(output);
+      }
+      messages.emplace_back(std::move(output));
       if (args.verbose) {
           std::cout << "\n" << perf_streamer->to_string() << "\n\n";
       }
@@ -202,10 +233,18 @@ static auto chat(Args &args) -> void {
     }
     std::cout << "Bye\n";
   } else {
-    if (args.mode == INFERENCE_MODE_CHAT) {
-      pipeline.chat({args.prompt}, gen_config, streamer.get());
+        if (args.mode == INFERENCE_MODE_CHAT) {
+            std::vector<qwen::ChatMessage> messages = system_messages;
+            messages.emplace_back(qwen::ChatMessage::ROLE_USER, args.prompt);
+            qwen::ChatMessage output = pipeline.chat(messages, gen_config, streamer.get());
+            if (args.sync) {
+                print_message(output);
+            }
     } else {
-      pipeline.generate(args.prompt, gen_config, streamer.get());
+            std::string output = pipeline.generate(args.prompt, gen_config, streamer.get());
+            if (args.sync) {
+                std::cout << output << "\n";
+            }
     }
     if (args.verbose) {
       std::cout << "\n" << perf_streamer->to_string() << "\n\n";

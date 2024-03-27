@@ -3,6 +3,7 @@
 #include "tiktoken.h"
 
 #include <ggml.h>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -290,6 +291,24 @@ struct QwenConfig {
   int im_end_id;
 };
 
+struct ChatMessage{
+  std::string role;
+  std::string content;
+
+  static const std::string ROLE_USER;
+  static const std::string ROLE_ASSISTANT;
+  static const std::string ROLE_SYSTEM;
+
+  ChatMessage() = default;
+  ChatMessage(std::string role, std::string content)
+      : role(std::move(role)), content(std::move(content)) {}
+
+  friend std::ostream &operator<<(std::ostream &os, const ChatMessage &self) {
+      os << "ChatMessage(role=" << std::quoted(self.role) << ", content=" << std::quoted(self.content);
+      return os << ")";
+  }
+};
+
 class QwenTokenizer {
   public:
 
@@ -299,9 +318,18 @@ class QwenTokenizer {
 
     auto decode(const std::vector<int> &ids) const -> std::string;
 
-    auto encode_history(const std::vector<std::string> &history, int max_length) const -> std::vector<int>;
+    // auto encode_history(const std::vector<std::string> &history, int max_length) const -> std::vector<int>;
 
-    auto build_prompt(const std::vector<std::string> &history) const -> std::string;
+    // auto build_prompt(const std::vector<std::string> &history) const -> std::string;
+  
+
+    std::vector<int> encode_messages(const std::vector<ChatMessage> &messages, int max_length) const;
+
+    ChatMessage decode_message(const std::vector<int> &ids) const{
+       return {ChatMessage::ROLE_ASSISTANT, decode(ids)};
+    };
+
+    static std::string build_prompt(const std::vector<ChatMessage> &messages);
 
     auto is_special_id(int id) const -> bool;
 
@@ -309,6 +337,9 @@ class QwenTokenizer {
     int eos_token_id;
     int im_start_id;
     int im_end_id;
+
+  protected:
+    static void check_chat_messages(const std::vector<ChatMessage> &messages);
 };
 
 class QwenAttention {
@@ -428,8 +459,8 @@ class Pipeline {
     auto generate(const std::string &prompt, const GenerationConfig &gen_config,
                   BaseStreamer *streamer = nullptr) const -> std::string;
 
-    auto chat(const std::vector<std::string> &history, const GenerationConfig &gen_config,
-              BaseStreamer *streamer = nullptr) const -> std::string;
+    auto chat(const std::vector<ChatMessage> &messages, const GenerationConfig &gen_config,
+              BaseStreamer *streamer = nullptr) const -> ChatMessage;
 
   public:
     std::unique_ptr<QwenTokenizer> tokenizer;

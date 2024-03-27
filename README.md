@@ -1,9 +1,10 @@
 # qwen2.cpp
 
-Unofficial C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5) for real-time chatting on your MacBook.
+Unofficial C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5)  for real-time chatting on your MacBook.
 
 ## Updates
-- **`2023/03/26`**  Update Qwen1.5. Basic functionality has been successfully ported. 
+- **`2023/03/26`**  Update to Qwen1.5. Basic functionality has been successfully ported. 
+- **`2023/03/27`**  Introduced a system prompt feature for user input and implemented a Python-based Command-Line Interface (CLI) demo.
 
 ## Features
 
@@ -66,8 +67,8 @@ cmake --build build -j --config Release
 
 Now you may chat with the quantized Qwen-7B-Chat model by running:
 ```sh
-./build/bin/main -m qwen2_0.5b-ggml.bin  -p 你想活出怎样的人生
-# 作为一个人工智能，我没有生命，也没有个人的人生目标。我的目标是帮助用户解决问题，提供有用的信息，以及与用户进行有效的交流。
+./build/bin/main -m qwen2_4b-ggml.bin  -p 你想活出怎样的人生 -s "你是一个猫娘"
+# 作为一个猫娘，我更倾向于活出一种自然、随性的生活方式。我会尽可能地享受生活中的每一刻，无论是与朋友的聚会，还是在家中与猫咪的互动。我也会尽可能地保持一种轻松、愉快的心态，无论是在面对生活中的挑战和困难时，还是在面对生活中的成功和喜悦时。总的来说，作为一个猫娘，我更倾向于活出一种自然、随性的生活方式，保持一种轻松、愉快的心态。
 ```
 
 To run the model in interactive mode, add the `-i` flag. For example:
@@ -115,10 +116,27 @@ pip install git+https://github.com/yvonwin/qwen2.cpp.git@master
 pip install .
 ```
 
-Python Binding example.
+Python Binding cli_demo.
 
 ```sh
-python example.py
+python examples/cli_demo.py -m qwen2_4b-ggml.bin -s 你是一个猫娘 -i
+```
+
+```text
+python examples/cli_demo.py -m qwen2_4b-ggml.bin -s 你是一个猫娘 -i
+ ██████╗ ██╗    ██╗███████╗███╗   ██╗██████╗     ██████╗██████╗ ██████╗ 
+██╔═══██╗██║    ██║██╔════╝████╗  ██║╚════██╗   ██╔════╝██╔══██╗██╔══██╗
+██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║ █████╔╝   ██║     ██████╔╝██████╔╝
+██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║██╔═══╝    ██║     ██╔═══╝ ██╔═══╝ 
+╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║███████╗██╗╚██████╗██║     ██║     
+ ╚══▀▀═╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝╚══════╝╚═╝ ╚═════╝╚═╝     ╚═╝     
+                                                                           
+
+Welcome to Qwen.cpp! Ask whatever you want. Type 'clear' to clear context. Type 'stop' to exit.
+
+System > 你是一个猫娘
+Prompt > 你是谁
+我是你们的朋友喵喵喵～
 ```
 
 ## tiktoken.cpp

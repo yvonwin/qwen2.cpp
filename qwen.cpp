@@ -7,6 +7,7 @@
 #include <random>
 #include <thread>
 #include <sys/stat.h>
+// #include <iostream>
 
 #ifdef __has_include
 #if __has_include(<unistd.h>)
@@ -47,6 +48,20 @@ auto tensor_to_cpu(ggml_tensor *tensor) -> ggml_tensor * {
   }
 #endif
   return tensor;
+}
+
+const std::string ChatMessage::ROLE_USER = "user";
+const std::string ChatMessage::ROLE_ASSISTANT = "assistant";
+const std::string ChatMessage::ROLE_SYSTEM = "system";
+
+void QwenTokenizer::check_chat_messages(const std::vector<ChatMessage> &messages) {
+   // the function not suit for message with system param
+    QWEN_CHECK(messages.size() % 2 == 1) << "invalid chat messages size " << messages.size();
+    for (size_t i = 0; i < messages.size(); i++) {
+        const std::string &target_role = (i % 2 == 0) ? ChatMessage::ROLE_USER : ChatMessage::ROLE_ASSISTANT;
+        QWEN_CHECK(messages[i].role == target_role)
+            << "expect messages[" << i << "].role to be " << target_role << ", but got " << messages[i].role;
+    }
 }
 
 // Adapted from https://github.com/ggerganov/llama.cpp/blob/master/llama.cpp
@@ -312,18 +327,6 @@ QwenTokenizer::QwenTokenizer(const std::string & tiktoken_path, const QwenConfig
   im_end_id = config.im_end_id;
 }
 
-auto QwenTokenizer::build_prompt(const std::vector<std::string> &history) const -> std::string {
-  QWEN_CHECK(history.size() % 2 == 1) << "invalid history size " << history.size();
-  std::ostringstream oss_prompt;
-  oss_prompt << "<|im_start|>system\nYou are a helpful assistant.<|im_end|>";
-  for (size_t i = 0; i < history.size() - 1; i += 2) {
-    // oss_prompt << "\n<|im_start|>user\n" << history[i] << "<|im_end|>\n<|im_start|>" << history[i + 1] << "<|im_end|>";
-    oss_prompt << "\n<|im_start|>user\n" << history[i] << "<|im_end|>\n<|im_start|>assistant" << history[i + 1] << "<|im_end|>";
-  }
-  oss_prompt << "\n<|im_start|>user\n" << history.back() <<  "<|im_end|>\n<|im_start|>assistant\n";
-
-  return oss_prompt.str();
-}
 
 auto QwenTokenizer::encode(const std::string &text, int max_length) const -> std::vector<int> {
   auto ids = tokenizer.encode(text);
@@ -341,13 +344,41 @@ auto QwenTokenizer::decode(const std::vector<int> &ids) const -> std::string {
   return text;
 }
 
-auto QwenTokenizer::encode_history(
-  const std::vector<std::string> &history, int max_length
-) const -> std::vector<int> {
-  std::string prompt = build_prompt(history);
-  std::vector<int> input_ids = encode(prompt, max_length);
-  return input_ids;
+// auto QwenTokenizer::encode_history(
+//   const std::vector<std::string> &history, int max_length
+// ) const -> std::vector<int> {
+//   std::string prompt = build_prompt(history);
+//   std::vector<int> input_ids = encode(prompt, max_length);
+//   return input_ids;
+// }
+
+std::string QwenTokenizer::build_prompt(const std::vector<ChatMessage> &messages) {
+  // check_chat_messages(messages); 
+  std::ostringstream oss_prompt;
+  oss_prompt << "<|im_start|>system\n" << messages.front().content << "<|im_end|>"; // apply system
+  
+  for (size_t i = 0; i < messages.size() - 1; i += 2) { 
+    if(messages[i].role == ChatMessage::ROLE_USER){
+      oss_prompt << "\n<|im_start|>user\n" << messages[i].content << "<|im_end|>\n<|im_start|>assistant" << messages[i + 1].content << "<|im_end|>";
+    }
+  }
+  oss_prompt << "\n<|im_start|>user\n" << messages.back().content <<  "<|im_end|>\n<|im_start|>assistant\n"; // last message
+
+  return oss_prompt.str();
 }
+
+std::vector<int> QwenTokenizer::encode_messages(const std::vector<ChatMessage> &messages, int max_length) const {
+    std::string prompt = build_prompt(messages);
+    std::vector<int> input_ids = encode(prompt, max_length);
+    return input_ids;
+}
+
+
+// ChatMessage QwenTokenizer::decode_message(const std::vector<int> &ids) const {
+//   ChatMessage message;
+//   message = QwenTokenizer::decode_message(ids);
+//   return message;
+// }
 
 auto QwenTokenizer::is_special_id(int id) const -> bool {
   return id == eos_token_id || id == im_start_id || id == im_end_id;
@@ -382,8 +413,6 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
 
   ggml_tensor *v = v_proj.forward(ctx, hidden_states); // [qlen, kv_hidden]
   ggml_tensor *value_layer = ggml_view_3d(gctx, v, head_size, num_kv_heads, qlen, head_size * ggml_element_size(v), v->nb[1], 0);
-
-  // std::cout<<"hello there"<<std::endl; //passed
 
 #ifdef GGML_USE_CUBLAS
   if (!ggml_is_contiguous(query_layer)) {
@@ -863,11 +892,12 @@ auto Pipeline::generate(
   return output;
 }
 
-auto Pipeline::chat(const std::vector<std::string> &history, const GenerationConfig &gen_config,
-                    BaseStreamer *streamer) const -> std::string {
-  std::vector<int> input_ids = tokenizer->encode_history(history, gen_config.max_context_length);
+auto Pipeline::chat(const std::vector<ChatMessage> &messages, const GenerationConfig &gen_config,
+                    BaseStreamer *streamer) const -> ChatMessage {
+  std::vector<int> input_ids = tokenizer->encode_messages(messages, gen_config.max_context_length);
   std::vector<int> new_output_ids = generate(input_ids, gen_config, streamer);
-  std::string output = tokenizer->decode(new_output_ids);
+  // std::string output = tokenizer->decode(new_output_ids);
+  ChatMessage output = tokenizer->decode_message(new_output_ids);
   return output;
 }
 

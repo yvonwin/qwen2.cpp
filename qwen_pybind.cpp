@@ -8,6 +8,13 @@ namespace qwen {
 namespace py = pybind11;
 using namespace pybind11::literals;
 
+template <typename T>
+static inline std::string to_string(const T &obj) {
+    std::ostringstream oss;
+    oss << obj;
+    return oss.str();
+}
+
 PYBIND11_MODULE(_C, m) {
   m.doc() = "qwen.cpp python binding";
 
@@ -39,7 +46,8 @@ PYBIND11_MODULE(_C, m) {
   py::class_<QwenTokenizer>(m, "QwenTokenizer")
     .def("encode", &QwenTokenizer::encode)
     .def("decode", &QwenTokenizer::decode)
-    .def("encode_history", &QwenTokenizer::encode_history);
+    .def("encode_messages", &QwenTokenizer::encode_messages)
+    .def("decode_message", &QwenTokenizer::decode_message);
 
   py::class_<GenerationConfig>(m, "GenerationConfig")
     .def(py::init<int, int, bool, int, float, float, float, int>(), "max_length"_a = 2048,
@@ -53,6 +61,17 @@ PYBIND11_MODULE(_C, m) {
     .def_readwrite("temperature", &GenerationConfig::temperature)
     .def_readwrite("repetition_penalty", &GenerationConfig::repetition_penalty)
     .def_readwrite("num_threads", &GenerationConfig::num_threads);
+
+  py::class_<ChatMessage>(m, "ChatMessage")
+      .def(py::init<std::string, std::string>(), "role"_a, "content"_a)
+      .def("__repr__", &to_string<ChatMessage>)
+      .def("__str__", &to_string<ChatMessage>)
+      .def_readonly_static("ROLE_SYSTEM", &ChatMessage::ROLE_SYSTEM)
+      .def_readonly_static("ROLE_USER", &ChatMessage::ROLE_USER)
+      .def_readonly_static("ROLE_ASSISTANT", &ChatMessage::ROLE_ASSISTANT)
+      .def_readwrite("role", &ChatMessage::role)
+      .def_readwrite("content", &ChatMessage::content);
+
 
   py::class_<Pipeline>(m, "Pipeline")
     .def(py::init<const std::string &, const std::string &>())
