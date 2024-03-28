@@ -363,8 +363,8 @@ class QwenMLP {
   public:
     QwenMLP() = default;
     QwenMLP(ModelContext * ctx, int hidden_size, int intermediate_size)
-      : gate_proj(ctx, hidden_size, intermediate_size, false),
-        up_proj(ctx, hidden_size, intermediate_size, false),
+      : gate_proj(ctx, hidden_size, intermediate_size, false), // w2
+        up_proj(ctx, hidden_size, intermediate_size, false),  // w1
         down_proj(ctx, intermediate_size, hidden_size, false) {}
 
     auto forward(ModelContext *ctx, ggml_tensor *hidden_states) const -> ggml_tensor *;
@@ -435,7 +435,7 @@ class QwenForCausalLM {
 
     auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor *;
 
-    static constexpr size_t MEM_SIZE     = 1280 * MB;  // 2k context
+    static constexpr size_t MEM_SIZE     = 512 * MB;  // 2k context
     static constexpr size_t SCRATCH_SIZE = 1280 * MB; // 2k context
 
     QwenConfig config;

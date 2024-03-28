@@ -1,5 +1,5 @@
 """https://github.com/li-plus/chatglm.cpp/blob/main/chatglm_cpp/openai_api.py
-examaple:
+run: python qwen_cpp/openai_api.py
 curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' -d '{"messages": [{"role": "user", "content": "你好"}]}'
 """
 import asyncio
@@ -17,7 +17,6 @@ from pydantic_settings import BaseSettings
 from sse_starlette.sse import EventSourceResponse
 
 logging.basicConfig(level=logging.INFO, format=r"%(asctime)s - %(module)s - %(levelname)s - %(message)s")
-
 
 class Settings(BaseSettings):
     model: str = "qwen2_0.5b-ggml.bin"

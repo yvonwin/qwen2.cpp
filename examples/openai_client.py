@@ -11,8 +11,8 @@ parser.add_argument("--prompt", default="你好", type=str)
 args = parser.parse_args()
 
 client = OpenAI(
-    api_key = 'hello',
-    base_url = "http://127.0.0.1:8000/v1"
+    # api_key = 'hello',
+    # base_url = "http://127.0.0.1:8000/v1"
 )
 
 messages = [{"role": "user", "content": args.prompt}]

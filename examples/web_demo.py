@@ -8,7 +8,7 @@ from pathlib import Path
 import qwen_cpp
 import gradio as gr
 
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent / "qwen2_0.5b-ggml.bin"
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent / "qwen2_1.8b-ggml.bin"
 DEFAULT_TIKTOKEN_PATH =   Path(__file__).resolve().parent.parent / "qwen.tiktoken"
 
 parser = argparse.ArgumentParser()

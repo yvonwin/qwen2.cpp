@@ -551,7 +551,7 @@ QwenForCausalLM::QwenForCausalLM(const QwenConfig &config)
                              (config.max_length * config.hidden_size / config.num_attention_heads * config.num_kv_heads * ggml_type_size(GGML_TYPE_F16) + tensor_ovhd);
   ctx_.dtype = config.dtype;
   ctx_.ctx_w = make_unique_ggml_context(ctx_w_size, nullptr, true);
-  ctx_.ctx_kv = make_unique_ggml_context(ctx_kv_size + 1 * MB, nullptr, false);
+  ctx_.ctx_kv = make_unique_ggml_context(ctx_kv_size + 1 * MB, nullptr, false); // 1MB extra for MPS
 
   transformer = QwenModel(&ctx_, config);
   lm_head = Linear(&ctx_, config.hidden_size, config.vocab_size, false);

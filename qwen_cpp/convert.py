@@ -299,12 +299,12 @@ def main():
     parser.add_argument(
         "-i",
         "--model_name_or_path",
-        default="Qwen/Qwen1.5-0.5B-Chat", # or Qwen/Qwen-1_8B-Chat, Qwen/Qwen1.5-0.5B-Chat
+        default="Qwen/Qwen1.5-1.8B-Chat", # Qwen/Qwen1.5-0.5B-Chat
         type=str,
         help="Model name or path used in AutoModel.from_pretrained",
     )
     parser.add_argument(
-        "-o", "--save_path", default="qwen2_0.5b-ggml.bin", type=Path, help="Path to save the generated GGML model"
+        "-o", "--save_path", default="qwen2_1.8b-ggml.bin", type=Path, help="Path to save the generated GGML model"
     )
     parser.add_argument(
         "-t",
