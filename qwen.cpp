@@ -344,14 +344,6 @@ auto QwenTokenizer::decode(const std::vector<int> &ids) const -> std::string {
   return text;
 }
 
-// auto QwenTokenizer::encode_history(
-//   const std::vector<std::string> &history, int max_length
-// ) const -> std::vector<int> {
-//   std::string prompt = build_prompt(history);
-//   std::vector<int> input_ids = encode(prompt, max_length);
-//   return input_ids;
-// }
-
 std::string QwenTokenizer::build_prompt(const std::vector<ChatMessage> &messages) {
   // check_chat_messages(messages); 
   std::ostringstream oss_prompt;
@@ -373,22 +365,15 @@ std::vector<int> QwenTokenizer::encode_messages(const std::vector<ChatMessage> &
     return input_ids;
 }
 
-
-// ChatMessage QwenTokenizer::decode_message(const std::vector<int> &ids) const {
-//   ChatMessage message;
-//   message = QwenTokenizer::decode_message(ids);
-//   return message;
-// }
-
 auto QwenTokenizer::is_special_id(int id) const -> bool {
   return id == eos_token_id || id == im_start_id || id == im_end_id;
 }
 
 QwenAttention::QwenAttention(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int max_length)
   : num_attention_heads(num_attention_heads), num_kv_heads(num_kv_heads),
-    q_proj(ctx, hidden_size, hidden_size), 
-    k_proj(ctx, hidden_size, hidden_size), 
-    v_proj(ctx, hidden_size, hidden_size),
+    q_proj(ctx, hidden_size, hidden_size), // head_dim * num_attention_heads
+    k_proj(ctx, hidden_size, hidden_size), // head_dim * num_kv_heads. Qwen1.5 still retains the MHA mechanism.
+    v_proj(ctx, hidden_size, hidden_size), // head_dim * num_kv_heads
     o_proj(ctx, hidden_size, hidden_size, false),
     k_cache(ggml_new_tensor_3d(ctx->ctx_kv.get(), GGML_TYPE_F16, hidden_size / num_attention_heads, max_length,
                                num_kv_heads)),
@@ -860,6 +845,7 @@ Pipeline::Pipeline(const std::string &path, const std::string &tiktoken_path) {
 
   // load config
   QwenConfig config = loader.read_basic<QwenConfig>();
+  // TODO Check how much resources CUDA needs to occupy.
   #ifdef GGML_USE_METAL
     // solve that problem: "ggml-metal.m:1453: false". This is an Out of Memory (OOM) error on Metal due to an excessively large context size.
     if (config.max_length > 4096){ // 32000+ is too big for my poor m1.This value may need further determination.
@@ -902,7 +888,6 @@ auto Pipeline::chat(const std::vector<ChatMessage> &messages, const GenerationCo
                     BaseStreamer *streamer) const -> ChatMessage {
   std::vector<int> input_ids = tokenizer->encode_messages(messages, gen_config.max_context_length);
   std::vector<int> new_output_ids = generate(input_ids, gen_config, streamer);
-  // std::string output = tokenizer->decode(new_output_ids);
   ChatMessage output = tokenizer->decode_message(new_output_ids);
   return output;
 }
