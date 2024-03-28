@@ -114,6 +114,13 @@ The Python binding provides high-level `chat` and `stream_chat` interface simila
 **Installation**
 
 You may also install from source. Add the corresponding CMAKE_ARGS for acceleration.
+
+```sh
+# CMAKE_ARGS
+CMAKE_ARGS="-DGGML_CUBLAS=ON" 
+CMAKE_ARGS="-DGGML_METAL=ON"
+```
+
 ```sh
 # install from the latest source hosted on GitHub
 pip install git+https://github.com/yvonwin/qwen2.cpp.git@master
@@ -187,7 +194,7 @@ For stream response, check out the example client script:
 OPENAI_BASE_URL=http://127.0.0.1:8000/v1 python examples/openai_client.py --stream --prompt 你想活出怎样的人生
 ```
 
-With this API server as backend, ChatGLM.cpp models can be seamlessly integrated into any frontend that uses OpenAI-style API, including mckaywrigley/chatbot-ui, fuergaosi233/wechat-chatgpt, Yidadaa/ChatGPT-Next-Web, and more.
+With this API server as backend, qwen.cpp models can be seamlessly integrated into any frontend that uses OpenAI-style API, including mckaywrigley/chatbot-ui, fuergaosi233/wechat-chatgpt, Yidadaa/ChatGPT-Next-Web, and more.
 
 ## tiktoken.cpp
 
