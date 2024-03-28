@@ -21,7 +21,8 @@ Support Matrix:
 
 ## Test in colab
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github.com/yvonwin/qwen2.cpp/blob/master/examples/RUN_QWEN_CPP.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/yvonwin/qwen2.cpp/blob/master/examples/RUN_QWEN_CPP.ipynb)
+
 
 ## Getting Started
 
