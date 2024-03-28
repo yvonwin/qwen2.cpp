@@ -4,7 +4,7 @@ Unofficial C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5)  f
 
 ## Updates
 - **`2023/03/26`**  Update to Qwen1.5. Basic functionality has been successfully ported. 
-- **`2023/03/27`**  Introduced a system prompt feature for user input and implemented a Python-based Command-Line Interface (CLI) demo.
+- **`2023/03/28`**  Introduced a system prompt feature for user input; Add cli and web demo, support oai server.
 
 ## Features
 
@@ -39,7 +39,7 @@ Download the qwen.tiktoken file from [Hugging Face](https://huggingface.co/Qwen/
 
 Use `convert.py` to transform Qwen-LM into quantized GGML format. For example, to convert the fp16 original model to q4_0 (quantized int4) GGML model, run:
 ```sh
-python3 qwen_cpp/convert.py -i Qwen/Qwen1.5-0.5B-Chat -t q4_0 -o qwen2_0.5b-ggml.bin
+python3 qwen_cpp/convert.py -i Qwen/Qwen1.5-1.8B-Chat -t q4_0 -o qwen2_1.8b-ggml.bin
 ```
 
 The original model (`-i <model_name_or_path>`) can be a HuggingFace model name or a local path to your pre-downloaded model. Currently supported models are:
@@ -73,7 +73,7 @@ Now you may chat with the quantized Qwen-7B-Chat model by running:
 
 To run the model in interactive mode, add the `-i` flag. For example:
 ```sh
-./build/bin/main -m qwen2_0.5b-ggml.bin  -i
+./build/bin/main -m qwen2_1.8b-ggml.bin  -i
 ```
 In interactive mode, your chat history will serve as the context for the next-round conversation.
 
@@ -108,7 +108,7 @@ The Python binding provides high-level `chat` and `stream_chat` interface simila
 
 **Installation**
 
-You may also install from source.
+You may also install from source. Add the corresponding CMAKE_ARGS for acceleration.
 ```sh
 # install from the latest source hosted on GitHub
 pip install git+https://github.com/yvonwin/qwen2.cpp.git@master
@@ -116,7 +116,9 @@ pip install git+https://github.com/yvonwin/qwen2.cpp.git@master
 pip install .
 ```
 
-Python Binding cli_demo.
+**CLI Demo**
+
+To chat in stream, run the below Python example:
 
 ```sh
 python examples/cli_demo.py -m qwen2_4b-ggml.bin -s 你是一个猫娘 -i
@@ -138,6 +140,49 @@ System > 你是一个猫娘
 Prompt > 你是谁
 我是你们的朋友喵喵喵～
 ```
+
+**Web Demo**
+
+Launch a web demo to chat in your browser:
+
+```sh
+python examples/web_demo.py -m qwen2_1.8b-ggml.bin
+```
+
+![web_demo](docs/web_demo.jpg)
+
+**OpenAI API**
+
+Start an API server compatible with OpenAI chat completions protocol:
+
+```sh
+MODEL=./qwen2_1.8b-ggml.bin uvicorn qwen_cpp.openai_api:app --host 127.0.0.1 --port 8000
+# MODEL=./qwen2_1.8b-ggml.bin python qwen_cpp/openai_api.py
+python -m MODEL=./qwen2_1.8b-ggml.bin uvicorn qwen_cpp.openai_api:app --host 127.0.0.1 --port 8000
+```
+
+Test your endpoint with curl:
+
+```sh
+curl http://127.0.0.1:8000/v1/chat/completions -H 'Content-Type: application/json' \
+    -d '{"messages": [{"role": "user", "content": "你好"}]}'
+```
+
+Use the OpenAI client to chat with your model:
+```sh
+>>> from openai import OpenAI
+>>> client = OpenAI(base_url="http://127.0.0.1:8000/v1")
+>>> response = client.chat.completions.create(model="default-model", messages=[{"role": "user", "content": "你好"}])
+>>> response.choices[0].message.content
+'你好！有什么我可以帮助你的吗？'
+```
+
+For stream response, check out the example client script:
+```sh
+OPENAI_BASE_URL=http://127.0.0.1:8000/v1 python examples/openai_client.py --stream --prompt 你想活出怎样的人生
+```
+
+With this API server as backend, ChatGLM.cpp models can be seamlessly integrated into any frontend that uses OpenAI-style API, including mckaywrigley/chatbot-ui, fuergaosi233/wechat-chatgpt, Yidadaa/ChatGPT-Next-Web, and more.
 
 ## tiktoken.cpp
 
@@ -181,3 +226,4 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 ## Acknowledgements
 
 * This project is greatly inspired by [qwen.cpp](https://github.com/QwenLM/qwen.cpp) [llama.cpp](https://github.com/ggerganov/llama.cpp), [chatglm.cpp](https://github.com/li-plus/chatglm.cpp), [ggml](https://github.com/ggerganov/ggml), [tiktoken](https://github.com/openai/tiktoken), [tokenizer](https://github.com/sewenew/tokenizer), [cpp-base64](https://github.com/ReneNyffenegger/cpp-base64), [re2](https://github.com/google/re2) and [unordered_dense](https://github.com/martinus/unordered_dense).
+* Thanks to the excellent work done on [chatglm.cpp](https://github.com/li-plus/chatglm.cpp)
