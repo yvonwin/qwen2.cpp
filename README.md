@@ -19,6 +19,10 @@ Support Matrix:
 * Platforms: Linux, MacOS
 * Models: [Qwen1.5](https://github.com/QwenLM/Qwen1.5)
 
+## Test in colab
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github.com/yvonwin/qwen2.cpp/blob/master/examples/RUN_QWEN_CPP.ipynb)
+
 ## Getting Started
 
 **Preparation**
