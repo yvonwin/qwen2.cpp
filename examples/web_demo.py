@@ -15,6 +15,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-m", "--model", default=DEFAULT_MODEL_PATH, type=Path, help="model path")
 parser.add_argument("--tiktoken", default=DEFAULT_TIKTOKEN_PATH, type=str, help="tiktoken path")
 parser.add_argument("--mode", default="chat", type=str, choices=["chat", "generate"], help="inference mode")
+parser.add_argument(
+    "-s", "--system", default="You are a helpful assistant.", type=str, help="system message to set the behavior of the assistant"
+)
 parser.add_argument("-l", "--max_length", default=2048, type=int, help="max total length including prompt and output")
 parser.add_argument("-c", "--max_context_length", default=512, type=int, help="max context length")
 parser.add_argument("--top_k", default=0, type=int, help="top-k sampling")
@@ -36,6 +39,8 @@ def postprocess(text):
 
 def predict(input, chatbot, max_length, top_p, temperature, messages):
     chatbot.append((postprocess(input), ""))
+    if args.system:
+        messages.append(qwen_cpp.ChatMessage(role="system", content=args.system))
     messages.append(qwen_cpp.ChatMessage(role="user", content=input))
 
     generation_kwargs = dict(

@@ -4,7 +4,7 @@ from typing import List
 
 import qwen_cpp
 
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent / "qwen2_0.5b-ggml.bin"
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parent.parent / "qwen2_1.8b-ggml.bin"
 DEFAULT_TIKTOKEN_PATH =   Path(__file__).resolve().parent.parent / "qwen.tiktoken"
 
 BANNER = """
@@ -31,7 +31,7 @@ def main() -> None:
         "--pp", "--prompt_path", default=None, type=Path, help="path to the plain text file that stores the prompt"
     )
     parser.add_argument(
-        "-s", "--system", default=None, type=str, help="system message to set the behavior of the assistant"
+        "-s", "--system", default="You are a helpful assistant.", type=str, help="system message to set the behavior of the assistant"
     )
     parser.add_argument(
         "--sp",
