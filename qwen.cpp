@@ -845,7 +845,12 @@ Pipeline::Pipeline(const std::string &path, const std::string &tiktoken_path) {
 
   // load config
   QwenConfig config = loader.read_basic<QwenConfig>();
-  // TODO Check how much resources CUDA needs to occupy.
+  #ifdef GGML_USE_CUBLAS
+    if (config.max_length > 4096){ // 7b 32000+ may be need 3090+.If using cublas fails, it seems to degrade to CPU.
+      config.max_length = 4096;
+    }
+  #endif
+
   #ifdef GGML_USE_METAL
     // solve that problem: "ggml-metal.m:1453: false". This is an Out of Memory (OOM) error on Metal due to an excessively large context size.
     if (config.max_length > 4096){ // 32000+ is too big for my poor m1.This value may need further determination.
