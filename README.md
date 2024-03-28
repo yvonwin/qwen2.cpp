@@ -213,6 +213,14 @@ cd tests
 RAYON_NUM_THREADS=1 python benchmark.py
 ```
 
+Test on m1 air. Qwen1.5_7b q4_0:
+
+```sh
+prompt time: 798.344 ms / 21 tokens (38.016 ms/token)
+output time: 15149.7 ms / 159 tokens (95.281 ms/token)
+total time: 15948.1 ms
+```
+
 ## Development
 
 **Unit Test**
