@@ -163,14 +163,31 @@ python examples/web_demo.py -m qwen2_1.8b-ggml.bin
 
 ![web_demo](docs/web_demo.jpg)
 
+## API Server
+
+**LangChain API**
+
+```sh
+MODEL=./qwen2_1.8b-ggml.bin python -m  uvicorn qwen_cpp.langchain_api:app --host 127.0.0.1 --port 8000
+```
+
+Test the api endpoint with `curl`:
+```sh
+curl http://127.0.0.1:8000 -H 'Content-Type: application/json' -d '{"prompt": "你好"}'
+```
+
+Run with LangChain:
+```sh
+python examples/langchain_client.py
+```
+
+
 **OpenAI API**
 
 Start an API server compatible with OpenAI chat completions protocol:
 
 ```sh
-MODEL=./qwen2_1.8b-ggml.bin uvicorn qwen_cpp.openai_api:app --host 127.0.0.1 --port 8000
-# MODEL=./qwen2_1.8b-ggml.bin python qwen_cpp/openai_api.py
-python -m MODEL=./qwen2_1.8b-ggml.bin uvicorn qwen_cpp.openai_api:app --host 127.0.0.1 --port 8000
+MODEL=./qwen2_1.8b-ggml.bin python -m  uvicorn qwen_cpp.openai_api:app --host 127.0.0.1 --port 8000
 ```
 
 Test your endpoint with curl:
