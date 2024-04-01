@@ -18,7 +18,7 @@ parser.add_argument("--mode", default="chat", type=str, choices=["chat", "genera
 parser.add_argument(
     "-s", "--system", default="You are a helpful assistant.", type=str, help="system message to set the behavior of the assistant"
 )
-parser.add_argument("-l", "--max_length", default=2048, type=int, help="max total length including prompt and output")
+parser.add_argument("-l", "--max_length", default=4096, type=int, help="max total length including prompt and output")
 parser.add_argument("-c", "--max_context_length", default=512, type=int, help="max context length")
 parser.add_argument("--top_k", default=0, type=int, help="top-k sampling")
 parser.add_argument("--top_p", default=0.7, type=float, help="top-p sampling")
@@ -28,7 +28,7 @@ parser.add_argument("-t", "--threads", default=0, type=int, help="number of thre
 parser.add_argument("--plain", action="store_true", help="display in plain text without markdown support")
 args = parser.parse_args()
 
-pipeline = qwen_cpp.Pipeline(args.model, args.tiktoken)
+pipeline = qwen_cpp.Pipeline(args.model, args.tiktoken, args.max_length)
 
 
 def postprocess(text):

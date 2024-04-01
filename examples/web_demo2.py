@@ -34,7 +34,7 @@ parser.add_argument("-t", "--threads", default=0, type=int, help="number of thre
 parser.add_argument("--plain", action="store_true", help="display in plain text without markdown support")
 args = parser.parse_args()
 
-pipeline = qwen_cpp.Pipeline(args.model, args.tiktoken)
+pipeline = qwen_cpp.Pipeline(args.model, args.tiktoken, args.max_length)
 
 History = List[Tuple[str, str]]
 Messages = List[Dict[str, str]]

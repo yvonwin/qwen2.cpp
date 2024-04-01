@@ -23,11 +23,11 @@ def _ensure_chat_message(message: Union[ChatMessage, Dict[str, Any]]) -> ChatMes
 
 class Pipeline(_C.Pipeline):
     def __init__(
-        self, model_path: str, tiktoken_path: str, *, dtype: Optional[str] = None
+        self, model_path: str, tiktoken_path: str, max_length: int = 4096, *, dtype: Optional[str] = None
     ) -> None:
         if Path(model_path).is_file() and Path(tiktoken_path).is_file():
             # load ggml and tiktoken
-            super().__init__(str(model_path), str(tiktoken_path))
+            super().__init__(str(model_path), str(tiktoken_path), int(max_length))
         else:
             from qwen_cpp.convert import convert
 

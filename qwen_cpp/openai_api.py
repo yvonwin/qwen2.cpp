@@ -52,7 +52,7 @@ class ChatCompletionRequest(BaseModel):
     temperature: float = Field(default=0.95, ge=0.0, le=2.0)
     top_p: float = Field(default=0.7, ge=0.0, le=1.0)
     stream: bool = False
-    max_tokens: int = Field(default=2048, ge=0)
+    max_tokens: int = Field(default=4096, ge=0)
     model_config = {
         "json_schema_extra": {
             "examples": [{"model": "default-model", "messages": [{"role": "user", "content": "你好"}]}]
@@ -120,7 +120,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
 )
-pipeline = qwen_cpp.Pipeline(settings.model, settings.tiktoken)
+pipeline = qwen_cpp.Pipeline(settings.model, settings.tiktoken, settings.max_length)
 lock = asyncio.Lock()
 
 

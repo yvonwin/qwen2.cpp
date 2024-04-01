@@ -66,7 +66,7 @@ def main() -> None:
     if args.sp:
         system = args.sp.read_text()
 
-    pipeline = qwen_cpp.Pipeline(args.model, args.tiktoken)
+    pipeline = qwen_cpp.Pipeline(args.model, args.tiktoken, args.max_length)
 
     if args.mode != "chat" and args.interactive:
         print("interactive demo is only supported for chat mode, falling back to non-interactive one")
