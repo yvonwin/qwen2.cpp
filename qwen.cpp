@@ -835,7 +835,7 @@ auto QwenForCausalLM::forward(
 
 // ===== pipeline =====
 
-Pipeline::Pipeline(const std::string &path, const std::string &tiktoken_path) {
+Pipeline::Pipeline(const std::string &path, const std::string &tiktoken_path, int max_length) {
   mapped_file = std::make_unique<MappedFile>(path);
   ModelLoader loader(std::string_view((char *)mapped_file->data, mapped_file->size));
 
@@ -845,18 +845,13 @@ Pipeline::Pipeline(const std::string &path, const std::string &tiktoken_path) {
 
   // load config
   QwenConfig config = loader.read_basic<QwenConfig>();
-  #ifdef GGML_USE_CUBLAS
-    if (config.max_length > 4096){ // 7b 32000+ may be need 3090+.If using cublas fails, it seems to degrade to CPU.
-      config.max_length = 4096;
-    }
-  #endif
-
-  #ifdef GGML_USE_METAL
-    // solve that problem: "ggml-metal.m:1453: false". This is an Out of Memory (OOM) error on Metal due to an excessively large context size.
-    if (config.max_length > 4096){ // 32000+ is too big for my poor m1.This value may need further determination.
-      config.max_length = 4096;
-    }
-  #endif
+  if (max_length > 0) {
+      QWEN_CHECK(max_length <= config.max_length)
+          << "Requested max_length (" << max_length << ") exceeds the max possible model sequence length ("
+          << config.max_length;
+      // std::cout << max_length << std::endl;
+      config.max_length = max_length;
+  }
   
   // load model
   model = std::make_unique<QwenForCausalLM>(config);
