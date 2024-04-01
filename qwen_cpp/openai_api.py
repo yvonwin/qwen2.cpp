@@ -19,8 +19,9 @@ from sse_starlette.sse import EventSourceResponse
 logging.basicConfig(level=logging.INFO, format=r"%(asctime)s - %(module)s - %(levelname)s - %(message)s")
 
 class Settings(BaseSettings):
-    model: str = "qwen2_0.5b-ggml.bin"
+    model: str = "qwen2_1.8b-ggml.bin"
     tiktoken: str = "qwen.tiktoken"
+    max_length: int = 4096
     num_threads: int = 0
 
 

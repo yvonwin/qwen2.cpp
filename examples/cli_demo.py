@@ -42,7 +42,7 @@ def main() -> None:
     )
     parser.add_argument("-i", "--interactive", action="store_true", help="run in interactive mode")
     parser.add_argument(
-        "-l", "--max_length", default=2048, type=int, help="max total length including prompt and output"
+        "-l", "--max_length", default=4096, type=int, help="max total length including prompt and output"
     )
     # parser.add_argument(
     #     "--max_new_tokens",

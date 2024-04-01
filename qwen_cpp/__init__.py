@@ -42,7 +42,7 @@ class Pipeline(_C.Pipeline):
         self,
         messages: List[ChatMessage],
         *,
-        max_length: int = 2048,
+        max_length: int = 4096,
         max_context_length: int = 512,
         do_sample: bool = True,
         top_k: int = 0,
