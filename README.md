@@ -163,6 +163,13 @@ python examples/web_demo.py -m qwen2_1.8b-ggml.bin
 
 ![web_demo](docs/web_demo.jpg)
 
+webdemo with system promopt:
+```sh
+python examples/web_demo2.py -m qwen2_1.8b-ggml.bin
+```
+
+![web_demo2](docs/web_demo2.jpg)
+
 ## API Server
 
 **LangChain API**
