@@ -267,6 +267,12 @@ cmake .. -DQWEN_ENABLE_TESTING=ON && make -j
 
 To format the code, run `make lint` inside the `build` folder. You should have `clang-format`, `black` and `isort` pre-installed.
 
+## TODO
+
+- [ ] sync ggml. [WIP]
+- [ ] qwen1.5 moe
+- [ ] Rag explore
+
 ## Acknowledgements
 
 * This project is greatly inspired by [qwen.cpp](https://github.com/QwenLM/qwen.cpp) [llama.cpp](https://github.com/ggerganov/llama.cpp), [chatglm.cpp](https://github.com/li-plus/chatglm.cpp), [ggml](https://github.com/ggerganov/ggml), [tiktoken](https://github.com/openai/tiktoken), [tokenizer](https://github.com/sewenew/tokenizer), [cpp-base64](https://github.com/ReneNyffenegger/cpp-base64), [re2](https://github.com/google/re2) and [unordered_dense](https://github.com/martinus/unordered_dense).
