@@ -92,7 +92,7 @@ struct ModelContext {
 #ifdef GGML_USE_METAL
   unique_ggml_metal_context_t ctx_metal;
 #endif
-  ggml_cgraph gf;
+  ggml_cgraph *gf;
   ggml_scratch scratch;
   std::vector<uninitialized_char> compute_buffer; // BLAS buffer
   std::vector<uninitialized_char> scratch_buffer; // intermediate tensor buffer
