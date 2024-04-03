@@ -265,9 +265,9 @@ auto Embedding::forward(ModelContext *ctx, ggml_tensor *input) const -> ggml_ten
 auto Linear::forward(ModelContext *ctx, ggml_tensor *input) const -> ggml_tensor * {
   // input: [seqlen, in_features]
   ggml_context *gctx = ctx->ctx_b.get();
-  ggml_tensor *output = ggml_mul_mat(gctx, weight, input); // [seqlen, out_features]
+  ggml_tensor *output = tensor_assign_buffers(ggml_mul_mat(gctx, weight, input)); // [seqlen, out_features]
   if (bias) {
-    output = ggml_add_inplace(gctx, output, bias);
+    output = tensor_assign_buffers(ggml_add_inplace(gctx, output, bias));
   }
   return output;
 }
@@ -275,8 +275,8 @@ auto Linear::forward(ModelContext *ctx, ggml_tensor *input) const -> ggml_tensor
 auto RMSNorm::forward(ModelContext *ctx, ggml_tensor *input, float eps) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
   auto ggml_rms_norm_fn = inplace ? ggml_rms_norm_inplace : ggml_rms_norm;
-  ggml_tensor *output = ggml_rms_norm_fn(gctx, input, eps);
-  output = ggml_mul_inplace(gctx, output, weight);
+  ggml_tensor *output = tensor_assign_buffers(ggml_rms_norm_fn(gctx, input, eps));
+  output = tensor_assign_buffers(ggml_mul_inplace(gctx, output, weight));
   return output;
 }
 
@@ -411,8 +411,8 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
     query_layer = tensor_assign_buffers(ggml_cont(gctx, query_layer));
   }
 #endif
-  query_layer = ggml_rope_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx);
-  query_layer = ggml_permute(gctx, query_layer, 0, 2, 1, 3); // [heads, qlen, head_size]
+  query_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx));
+  query_layer = tensor_assign_buffers(ggml_permute(gctx, query_layer, 0, 2, 1, 3)); // [heads, qlen, head_size]
 
 #ifdef GGML_USE_CUBLAS
   if (!ggml_is_contiguous(key_layer)) {
