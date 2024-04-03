@@ -7,7 +7,7 @@
 #include <random>
 #include <thread>
 #include <sys/stat.h>
-// #include <iostream>
+#include <iostream>
 
 #ifdef __has_include
 #if __has_include(<unistd.h>)
@@ -223,8 +223,12 @@ auto ModelLoader::read_tensor(const std::string &name, ggml_tensor *tensor) -> v
   // read and check tensor shape
   {
     int ndim = read_basic<int>();
-    QWEN_CHECK(ndim == tensor->n_dims)
-      << "tensor " << name << " ndim mismatch: expect " << tensor->n_dims << " but got " << ndim;
+    int n_dims = ggml_n_dims((tensor));
+      // a quick fix
+      if ((n_dims == 1) && (ndim == 2) && (tensor->ne[1] == 1))
+          n_dims = 2;
+    QWEN_CHECK(ndim == n_dims)
+      << "tensor " << name << " ndim mismatch: expect " << n_dims << " but got " << ndim;
     for (int i = ndim - 1; i >= 0; i--) {
       int dim_size = read_basic<int>();
       QWEN_CHECK(dim_size == tensor->ne[i]) << "tensor " << name << " shape mismatch at dim " << i
@@ -251,16 +255,19 @@ auto ModelLoader::read_tensor(const std::string &name, ggml_tensor *tensor) -> v
 // ===== modules =====
 
 auto Embedding::forward(ModelContext *ctx, ggml_tensor *input) const -> ggml_tensor * {
-  ggml_tensor *output = ggml_get_rows(ctx->ctx_b.get(), weight, input);
+  ggml_tensor *output = (ggml_n_dims(input) == 1) && (ggml_type::GGML_TYPE_I32 == input->type)
+                          ? ggml_get_rows(ctx->ctx_b.get(), weight, input)
+                          : ggml_mul_mat(ctx->ctx_b.get(), weight, input);
+  // ggml_tensor *output = ggml_get_rows(ctx->ctx_b.get(), weight, input);
   return output;
 }
 
 auto Linear::forward(ModelContext *ctx, ggml_tensor *input) const -> ggml_tensor * {
   // input: [seqlen, in_features]
   ggml_context *gctx = ctx->ctx_b.get();
-  ggml_tensor *output = tensor_assign_buffers(ggml_mul_mat(gctx, weight, input)); // [seqlen, out_features]
+  ggml_tensor *output = ggml_mul_mat(gctx, weight, input); // [seqlen, out_features]
   if (bias) {
-    output = tensor_assign_buffers(ggml_add_inplace(gctx, output, bias));
+    output = ggml_add_inplace(gctx, output, bias);
   }
   return output;
 }
@@ -268,8 +275,8 @@ auto Linear::forward(ModelContext *ctx, ggml_tensor *input) const -> ggml_tensor
 auto RMSNorm::forward(ModelContext *ctx, ggml_tensor *input, float eps) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
   auto ggml_rms_norm_fn = inplace ? ggml_rms_norm_inplace : ggml_rms_norm;
-  ggml_tensor *output = tensor_assign_buffers(ggml_rms_norm_fn(gctx, input, eps));
-  output = tensor_assign_buffers(ggml_mul_inplace(gctx, output, weight));
+  ggml_tensor *output = ggml_rms_norm_fn(gctx, input, eps);
+  output = ggml_mul_inplace(gctx, output, weight);
   return output;
 }
 
@@ -404,8 +411,8 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
     query_layer = tensor_assign_buffers(ggml_cont(gctx, query_layer));
   }
 #endif
-  query_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx));
-  query_layer = tensor_assign_buffers(ggml_cont(gctx, ggml_permute(gctx, query_layer, 0, 2, 1, 3))); // [heads, qlen, head_size]
+  query_layer = ggml_rope_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx);
+  query_layer = ggml_permute(gctx, query_layer, 0, 2, 1, 3); // [heads, qlen, head_size]
 
 #ifdef GGML_USE_CUBLAS
   if (!ggml_is_contiguous(key_layer)) {
@@ -413,7 +420,6 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
   }
 #endif
   key_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, key_layer, KQ_pos, rope_dim, 2, n_ctx));
-
   key_layer = tensor_assign_buffers(ggml_permute(gctx, key_layer, 0, 2, 1, 3)); // [kv_heads, qlen, head_size]
   value_layer = tensor_assign_buffers(ggml_permute(gctx, value_layer, 1, 2, 0, 3)); // [kv_heads, head_size, qlen]
 
@@ -421,11 +427,11 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
   ggml_tensor *k_cache_view = tensor_assign_buffers(
     ggml_view_3d(gctx, k_cache, head_size, qlen, num_kv_heads, k_cache->nb[1], k_cache->nb[2],
                  n_past * head_size * ggml_element_size(k_cache))); // [kv_heads, qlen, head_size]
-  ggml_build_forward_expand(&ctx->gf, ggml_cpy(gctx, key_layer, k_cache_view));
+  ggml_build_forward_expand(ctx->gf, ggml_cpy(gctx, key_layer, k_cache_view));
   ggml_tensor *v_cache_view = tensor_assign_buffers(
     ggml_view_3d(gctx, v_cache, qlen, head_size, num_kv_heads, v_cache->nb[1], v_cache->nb[2],
                  n_past * ggml_element_size(v_cache))); // [kv_heads, head_size, qlen]
-  ggml_build_forward_expand(&ctx->gf, ggml_cpy(gctx, value_layer, v_cache_view));
+  ggml_build_forward_expand(ctx->gf, ggml_cpy(gctx, value_layer, v_cache_view));  
 
   // concat key & value with past kv
   key_layer = tensor_assign_buffers(
@@ -439,7 +445,7 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
   ggml_tensor *attn_scores = 
     tensor_assign_buffers(ggml_mul_mat(gctx, key_layer, query_layer)); // [kv_heads, mqa_scale * qlen, klen]
   attn_scores = tensor_assign_buffers(
-    ggml_scale_inplace(gctx, attn_scores, ggml_new_f32(gctx, 1.f / std::sqrt(head_size))));
+    ggml_scale_inplace(gctx, attn_scores, 1.f / std::sqrt(head_size)));
   if (n_past == 0) {
     // build attention mask for context input
     attn_scores = tensor_assign_buffers(ggml_diag_mask_inf_inplace(gctx, attn_scores, n_past));
@@ -599,7 +605,7 @@ auto QwenForCausalLM::generate_next_token(
   int n_ctx
 ) -> int32_t {
   ctx_.ctx_b = make_unique_ggml_context(ctx_.compute_buffer.size(), ctx_.compute_buffer.data(), false);
-  ctx_.gf = {};
+  ctx_.gf = ggml_new_graph(ctx_.ctx_b.get());
 
   int n_threads = gen_config.num_threads; // user defined
   if (n_threads <= 0) {
@@ -623,16 +629,16 @@ auto QwenForCausalLM::generate_next_token(
   }
 
   ggml_tensor *lm_logits = forward(&ctx_, curr_input_ids, KQ_pos, n_ctx);
-  lm_logits->backend = GGML_BACKEND_CPU;
+  lm_logits->backend = GGML_BACKEND_TYPE_CPU;
   if (KQ_pos) {
     tensor_to_cpu(KQ_pos);
   }
 
-  ggml_build_forward_expand(&ctx_.gf, lm_logits);
+  ggml_build_forward_expand(ctx_.gf, lm_logits);
 #ifdef GGML_USE_METAL
   ggml_metal_graph_compute(ctx_.ctx_metal.get(), &ctx_.gf);
 #else
-  ggml_graph_compute_helper(ctx_.work_buffer, &ctx_.gf, n_threads);
+  ggml_graph_compute_helper(ctx_.work_buffer, ctx_.gf, n_threads);
 #endif
 
   int vocab_size = lm_logits->ne[0];
