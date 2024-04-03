@@ -32,7 +32,7 @@ ggml_tensor *tensor_assign_buffers(ggml_tensor *tensor) {
 
 auto tensor_to_device(ggml_tensor *tensor) -> ggml_tensor * {
 #ifdef GGML_USE_CUBLAS
-  if (tensor->backend == GGML_BACKEND_CPU) {
+  if (tensor->backend == GGML_BACKEND_TYPE_CPU) {
     tensor->backend = GGML_BACKEND_GPU;
     ggml_cuda_transform_tensor(tensor->data, tensor);
   }
@@ -42,9 +42,9 @@ auto tensor_to_device(ggml_tensor *tensor) -> ggml_tensor * {
 
 auto tensor_to_cpu(ggml_tensor *tensor) -> ggml_tensor * {
 #ifdef GGML_USE_CUBLAS
-  if (tensor->backend != GGML_BACKEND_CPU) {
+  if (tensor->backend != GGML_BACKEND_TYPE_CPU) {
     ggml_cuda_free_data(tensor);
-    tensor->backend = GGML_BACKEND_CPU;
+    tensor->backend = GGML_BACKEND_TYPE_CPU;
   }
 #endif
   return tensor;
@@ -636,7 +636,7 @@ auto QwenForCausalLM::generate_next_token(
 
   ggml_build_forward_expand(ctx_.gf, lm_logits);
 #ifdef GGML_USE_METAL
-  ggml_metal_graph_compute(ctx_.ctx_metal.get(), &ctx_.gf);
+  ggml_metal_graph_compute(ctx_.ctx_metal.get(), ctx_.gf);
 #else
   ggml_graph_compute_helper(ctx_.work_buffer, ctx_.gf, n_threads);
 #endif
