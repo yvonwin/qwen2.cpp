@@ -67,7 +67,11 @@ if (QWEN_ENABLE_TESTING)
 
   # Now simply link against gtest or gtest_main as needed. Eg
   add_executable(qwen_test qwen_test.cpp)
+  if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_link_libraries(qwen_test PRIVATE qwen gtest_main)
+  else()
   target_link_libraries(qwen_test PRIVATE qwen gtest_main stdc++fs)
+  endif()
   gtest_discover_tests(qwen_test)
 endif ()
 
