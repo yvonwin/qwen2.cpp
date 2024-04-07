@@ -237,7 +237,7 @@ class Qwen2Converter:
             config.num_key_value_heads,
             config.num_hidden_layers,
             config.intermediate_size,
-            tokenizer.model_max_length, # 32000 tmp test 
+            tokenizer.model_max_length,
             config.eos_token_id,                             # eos 151645
             list(tokenizer.added_tokens_decoder.keys())[0], # pad 151643
             list(tokenizer.added_tokens_decoder.keys())[1], # im_start 151644
@@ -263,34 +263,106 @@ class Qwen2Converter:
                 f"model.layers.{i}.mlp.up_proj.weight",
                 f"model.layers.{i}.mlp.down_proj.weight",
             ]
+
         weight_names += [
             "model.norm.weight",
             "lm_head.weight",
         ]
+        print(len(weight_names))
+        dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
+
+class Qwen2MOEConverter:
+    @classmethod
+    def convert(cls, f, model, tokenizer, ggml_type):
+        f.write(b"ggml")  # magic
+        cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type) # generation_config is not use now.
+        cls.dump_model(f, model, ggml_type)
+
+    @staticmethod
+    def dump_config(f, config, generation_config, tokenizer, ggml_type):
+        config_values = [
+            ggml_type.value,
+            config.vocab_size,
+            config.hidden_size,
+            config.num_attention_heads,
+            config.num_key_value_heads,
+            config.num_hidden_layers,
+            config.intermediate_size,
+            config.moe_intermediate_size,
+            config.shared_expert_intermediate_size,
+            config.num_experts_per_tok,
+            config.num_experts,
+            1 if config.norm_topk_prob else 0,  
+            tokenizer.model_max_length,
+            config.eos_token_id,                             # eos 151645
+            list(tokenizer.added_tokens_decoder.keys())[0], # pad 151643
+            list(tokenizer.added_tokens_decoder.keys())[1], # im_start 151644
+            list(tokenizer.added_tokens_decoder.keys())[2], # im_end 151645
+        ]
+        f.write(struct.pack("i" * len(config_values), *config_values))
+
+    @staticmethod
+    def dump_model(f, model, ggml_type):
+        weight_names = ["model.embed_tokens.weight"]
+        for i in range(model.config.num_hidden_layers):
+            weight_names += [
+                f"model.layers.{i}.input_layernorm.weight",
+                f"model.layers.{i}.self_attn.q_proj.weight",
+                f"model.layers.{i}.self_attn.q_proj.bias",
+                f"model.layers.{i}.self_attn.k_proj.weight",
+                f"model.layers.{i}.self_attn.k_proj.bias",
+                f"model.layers.{i}.self_attn.v_proj.weight",
+                f"model.layers.{i}.self_attn.v_proj.bias",
+                f"model.layers.{i}.self_attn.o_proj.weight",
+                f"model.layers.{i}.post_attention_layernorm.weight",
+                f"model.layers.{i}.mlp.gate.weight",
+                f"model.layers.{i}.mlp.shared_expert.down_proj.weight",
+                f"model.layers.{i}.mlp.shared_expert.gate_proj.weight",
+                f"model.layers.{i}.mlp.shared_expert.up_proj.weight",
+                f"model.layers.{i}.mlp.shared_expert_gate.weight",
+
+            ]
+            for j in range(model.num_experts):
+                weight_names += [
+                    f"model.layers.{i}.mlp.experts.{j}.gate_proj.weight",
+                    f"model.layers.{i}.mlp.experts.{j}.up_proj.weight",
+                    f"model.layers.{i}.mlp.experts.{j}.down_proj.weight",
+                ]
+        weight_names += [
+            "model.norm.weight",
+            "lm_head.weight",
+        ]
+        print(len(weight_names)) # 4659
         dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
 
 def convert(f: BinaryIO, model_name_or_path: str, dtype: str = "q4_0"):
     ggml_type = GGMLType[dtype.upper()]
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True)
+    # tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
+    # model = AutoModelForCausalLM.from_pretrained(model_name_or_path, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+    model = AutoModelForCausalLM.from_pretrained(model_name_or_path)
 
     # print(model)
-    # state_dict = model.state_dict()
-    # keys = state_dict.keys()
-    # print(keys)
+    state_dict = model.state_dict()
+    keys = state_dict.keys()
+    print(keys)
     # print(state_dict)
+    # print(len(state_dict))
 
     # print(model.config.eos_token_id) # 151645
     # print(model.generation_config)
     # print(tokenizer.model_max_length)
     # print(list(tokenizer.added_tokens_decoder.keys())) # 1.5 only
 
-    if "1.5" in model_name_or_path:
-        print('Convert Qwen')
-        Qwen2Converter.convert(f, model, tokenizer, ggml_type)
-    else:
+    if model.config.architectures[0]=="Qwen2ForCausalLM":
         print('Convert Qwen1.5')
+        Qwen2Converter.convert(f, model, tokenizer, ggml_type)
+    elif model.config.architectures[0]=="Qwen2MoeForCausalLM":
+        print('Convert Qwen1.5-Moe')
+        Qwen2MOEConverter.convert(f, model, tokenizer, ggml_type)
+    else:
+        print('Warning: Qwen1 ist not supported for inference now')
         QwenConverter.convert(f, model, tokenizer, ggml_type)
 
 
