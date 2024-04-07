@@ -379,8 +379,8 @@ auto QwenTokenizer::is_special_id(int id) const -> bool {
 QwenAttention::QwenAttention(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int max_length)
   : num_attention_heads(num_attention_heads), num_kv_heads(num_kv_heads),
     q_proj(ctx, hidden_size, hidden_size), // head_dim * num_attention_heads
-    k_proj(ctx, hidden_size, hidden_size), // head_dim * num_kv_heads. Qwen1.5 still retains the MHA mechanism.
-    v_proj(ctx, hidden_size, hidden_size), // head_dim * num_kv_heads
+    k_proj(ctx, hidden_size, hidden_size/(num_attention_heads/num_kv_heads)), // head_dim * num_kv_heads. Qwen1.5 32B is GQA model
+    v_proj(ctx, hidden_size, hidden_size/(num_attention_heads/num_kv_heads)), // head_dim * num_kv_heads
     o_proj(ctx, hidden_size, hidden_size, false),
     k_cache(ggml_new_tensor_3d(ctx->ctx_kv.get(), GGML_TYPE_F16, hidden_size / num_attention_heads, max_length,
                                num_kv_heads)),
@@ -488,7 +488,6 @@ auto QwenBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tens
   hidden_states = post_attention_layernorm.forward(ctx, hidden_states, 1e-6f);
   hidden_states = mlp.forward(ctx, hidden_states);
   hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
-
   return hidden_states;
 }
 
@@ -540,6 +539,8 @@ QwenForCausalLM::QwenForCausalLM(const QwenConfig &config)
   const size_t ctx_w_size = (3 + config.num_hidden_layers * 12) * tensor_ovhd;
   const size_t ctx_kv_size = 2 * config.num_hidden_layers *
                              (config.max_length * config.hidden_size / config.num_attention_heads * config.num_kv_heads * ggml_type_size(GGML_TYPE_F16) + tensor_ovhd);
+  // std::cout<<ctx_w_size << std::endl;
+  // std::cout<<ctx_kv_size << std::endl;
   ctx_.dtype = config.dtype;
   ctx_.ctx_w = make_unique_ggml_context(ctx_w_size, nullptr, true);
   ctx_.ctx_kv = make_unique_ggml_context(ctx_kv_size + 1 * MB, nullptr, false); // 1MB extra for MPS
@@ -855,7 +856,6 @@ Pipeline::Pipeline(const std::string &path, const std::string &tiktoken_path, in
       QWEN_CHECK(max_length <= config.max_length)
           << "Requested max_length (" << max_length << ") exceeds the max possible model sequence length ("
           << config.max_length;
-      // std::cout << max_length << std::endl;
       config.max_length = max_length;
   }
   
