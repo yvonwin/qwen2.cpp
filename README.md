@@ -1,10 +1,11 @@
 # qwen2.cpp
 
-Unofficial C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5)  for real-time chatting on your MacBook.
+This is an independent C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5). This project extends the official [qwen.cpp](https://github.com/QwenLM/qwen.cpp) implementation, which is no longer actively maintained., which is no longer maintained。 It is designed for real-time chatting on your MacBook.
 
 ## Updates
 - **`2023/03/26`**  Update to Qwen1.5. Basic functionality has been successfully ported. 
 - **`2023/03/28`**  Introduced a system prompt feature for user input; Add cli and web demo, support oai server.
+- **`2023/04/07`** Support [Qwen1.5-32B](https://huggingface.co/Qwen/Qwen1.5-32B-Chat).
 
 ## Features
 
@@ -51,7 +52,9 @@ The original model (`-i <model_name_or_path>`) can be a HuggingFace model name o
 * Qwen1.5-0.5B: `Qwen/Qwen1.5-0.5B-Chat`
 * Qwen1.5-1.8B: `Qwen/Qwen1.5-1.8B`
 * Qwen1.5-7B: `Qwen/Qwen1.5-7B-Chat`
-...
+* Qwen1.5-14B: `Qwen/Qwen1.5-14B-Chat`
+* Qwen1.5-32B: `Qwen/Qwen1.5-32B-Chat`
+& Qwen1.5-72B: OOM when convert
 
 You are free to try any of the below quantization types by specifying `-t <type>`:
 * `q4_0`: 4-bit integer quantization with fp16 scales.
@@ -70,11 +73,23 @@ cmake -B build
 cmake --build build -j --config Release
 ```
 
+If you want to run the 32B model, you need to follow these steps:
+
+> Open the ggml.c file.
+> Locate line 15870.
+> Comment out this line of code.
+> Please note, this is a temporary solution, and I am working hard to find a better way to handle this issue.
+
 Now you may chat with the quantized Qwen-7B-Chat model by running:
 ```sh
-./build/bin/main -m qwen2_4b-ggml.bin  -p 你想活出怎样的人生 -s "你是一个猫娘"
-# 作为一个猫娘，我更倾向于活出一种自然、随性的生活方式。我会尽可能地享受生活中的每一刻，无论是与朋友的聚会，还是在家中与猫咪的互动。我也会尽可能地保持一种轻松、愉快的心态，无论是在面对生活中的挑战和困难时，还是在面对生活中的成功和喜悦时。总的来说，作为一个猫娘，我更倾向于活出一种自然、随性的生活方式，保持一种轻松、愉快的心态。
+./build/bin/main -m qwen2_32b-ggml.bin  -p 你想活出怎样的人生 -s "你是一个猫娘"
+# 作为一只猫娘，我想要活出充满活力、自由自在和温暖幸福的人生。
+# 首先，我希望能够保持猫的天性，充满好奇心和活力。我想要探索世界，无论是大自然的壮丽景色，还是城市中的繁华景象。
+# 其次，我希望能够享受自由自在的生活。无论是选择在温暖的阳光下慵懒地打个盹，还是在月光下悄悄地探索黑夜的神秘，我都希望能够随心所欲地享受生活。
+# 最后，我希望能够拥有温暖幸福的家庭和朋友。无论是和家人一起分享美食，还是和朋友们一起度过欢乐的时光，我都希望能够感受到彼此之间的关爱和支持，共同创造美好的回忆。
+# 总的来说，我想要活出一种平衡和谐的生活，既有猫的自由和活力，又有温暖的家庭和朋友带来的幸福。
 ```
+
 
 To run the model in interactive mode, add the `-i` flag. For example:
 ```sh
@@ -269,8 +284,9 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 
 ## TODO
 
+- [x] Qwen1.5 32b
 - [ ] sync ggml. [WIP]
-- [ ] qwen1.5 moe
+- [ ] Qwen1.5 moe
 - [ ] Rag explore
 
 ## Acknowledgements
