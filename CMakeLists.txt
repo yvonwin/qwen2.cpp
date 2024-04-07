@@ -67,7 +67,7 @@ if (QWEN_ENABLE_TESTING)
 
   # Now simply link against gtest or gtest_main as needed. Eg
   add_executable(qwen_test qwen_test.cpp)
-  target_link_libraries(qwen_test PRIVATE qwen gtest_main)
+  target_link_libraries(qwen_test PRIVATE qwen gtest_main stdc++fs)
   gtest_discover_tests(qwen_test)
 endif ()
 

@@ -61,9 +61,9 @@ class QwenTest : public ::testing::Test {
       reset_cgraph();
     }
 
-    auto reset_cgraph() -> void { ctx.gf = {}; }
+    auto reset_cgraph() -> void { ctx.gf = ggml_new_graph(ctx.ctx_b.get()); }
 
-    auto cpu_graph_compute(int n_threads) -> void { ggml_graph_compute_helper(ctx.work_buffer, &ctx.gf, n_threads); }
+    auto cpu_graph_compute(int n_threads) -> void { ggml_graph_compute_helper(ctx.work_buffer, ctx.gf, n_threads); }
 
     auto device_graph_compute(int n_threads) -> void {
       cpu_graph_compute(n_threads);
@@ -110,7 +110,7 @@ TEST_F(QwenTest, Embedding) {
   EXPECT_EQ(out->backend, x->backend);
   out->backend = GGML_BACKEND_CPU;
 
-  ggml_build_forward_expand(&ctx.gf, out);
+  ggml_build_forward_expand(ctx.gf, out);
   device_graph_compute(get_num_threads());
 
   expect_all_close(y, out);
@@ -154,7 +154,7 @@ TEST_F(QwenTest, QwenMLP) {
   EXPECT_EQ(out->backend, x->backend);
   out->backend = GGML_BACKEND_CPU;
 
-  ggml_build_forward_expand(&ctx.gf, out);
+  ggml_build_forward_expand(ctx.gf, out);
   device_graph_compute(get_num_threads());
 
   expect_all_close(ref, out);
