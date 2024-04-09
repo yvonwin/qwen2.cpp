@@ -291,6 +291,14 @@ struct QwenConfig {
   int im_end_id;
 };
 
+struct QwenMoeConfig : QwenConfig {
+  int moe_intermediate_size;
+  int shared_expert_intermediate_size;
+  int num_experts;
+  int num_experts_per_tok;
+  int norm_topk_prob;
+};
+
 struct ChatMessage{
   std::string role;
   std::string content;
@@ -369,6 +377,39 @@ class QwenMLP {
     Linear down_proj;
 };
 
+class Qwen2MoeSparseMoeBlock{
+  public:
+      Qwen2MoeSparseMoeBlock() = default;
+      Qwen2MoeSparseMoeBlock(ModelContext * ctx, int hidden_size, int intermediate_size, int moe_intermediate_size, int shared_expert_intermediate_size, int num_experts, int num_experts_per_tok)
+        :
+        gate(ctx, hidden_size, num_experts, false),
+        shared_expert(ctx, hidden_size, shared_expert_intermediate_size),
+        shared_expert_gate(ctx, hidden_size, 1, false),
+        norm_topk_prob(false)
+
+      {
+          for (int i = 0; i < num_experts; i++)
+          {
+              experts.emplace_back(QwenMLP(ctx, hidden_size, moe_intermediate_size));
+              expert_gates.push_back(experts[i].gate_proj.weight);
+              expert_downs.push_back(experts[i].down_proj.weight);
+              expert_ups.push_back(experts[i].up_proj.weight);
+          }
+      }
+
+      auto forward(ModelContext *ctx, ggml_tensor *hidden_states, int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
+
+      Linear gate;
+      std::vector<QwenMLP> experts;
+      std::vector<ggml_tensor *> expert_gates;
+      std::vector<ggml_tensor *> expert_ups;
+      std::vector<ggml_tensor *> expert_downs;
+      QwenMLP shared_expert;
+      Linear shared_expert_gate;
+      bool norm_topk_prob;
+};
+
+
 class QwenBlock {
   public:
     QwenBlock() = default;
@@ -386,6 +427,23 @@ class QwenBlock {
     QwenMLP mlp;
 };
 
+class QwenMoeBlock {
+  public:
+    QwenMoeBlock() = default;
+    QwenMoeBlock(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int intermediate_size, int moe_intermediate_size, int shared_expert_intermediate_size, int num_experts, int num_experts_per_tok, int max_length)
+      : input_layernorm(ctx, hidden_size, false),
+        attn(ctx, hidden_size, num_attention_heads, num_kv_heads, max_length),
+        post_attention_layernorm(ctx, hidden_size, false),
+        mlp(ctx, hidden_size, intermediate_size, moe_intermediate_size, shared_expert_intermediate_size, num_experts,num_experts_per_tok) {}
+
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_ctx, int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
+
+    RMSNorm input_layernorm;
+    QwenAttention attn;
+    RMSNorm post_attention_layernorm;
+    Qwen2MoeSparseMoeBlock mlp;
+};
+
 class QwenModel {
   public:
     QwenModel() = default;
@@ -395,6 +453,19 @@ class QwenModel {
 
     Embedding embed_tokens;
     std::vector<QwenBlock> layers;
+    RMSNorm norm;
+};
+
+class QwenMoeModel {
+  public:
+    QwenMoeModel() = default;
+    QwenMoeModel(ModelContext *ctx, const QwenMoeConfig &config);
+
+    // Attention: These parameters should not be set to fixed values. I did this for quick implementation.
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx, int num_experts=60, int num_experts_per_tok=4) const -> ggml_tensor *;
+
+    Embedding embed_tokens;
+    std::vector<QwenMoeBlock> layers;
     RMSNorm norm;
 };
 
@@ -426,17 +497,36 @@ class QwenForCausalLM {
 
     static auto sampling_softmax_inplace(TokenIdScore *first, TokenIdScore *last) -> void;
 
-    auto load(ModelLoader &loader) -> void;
+    virtual void load(ModelLoader &loader);
 
-    auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor *;
+    virtual ggml_tensor * forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const;
 
-    static constexpr size_t MEM_SIZE     = 512 * MB;  // 2k context
+    static constexpr size_t MEM_SIZE     = 1280 * MB;  // 2k context
     static constexpr size_t SCRATCH_SIZE = 1280 * MB; // 2k context
 
     QwenConfig config;
     QwenModel transformer;
     Linear lm_head;
 
+    private:
+      ModelContext ctx_;
+      std::vector<std::pair<std::string, ggml_tensor *>> state_dict_;
+};
+
+class QwenMoeForCausalLM : public QwenForCausalLM {
+  public:
+    QwenMoeForCausalLM(const QwenMoeConfig &config);  // Declaration
+    ~QwenMoeForCausalLM();
+    // Override methods here if needed
+
+    auto load(ModelLoader &loader) -> void override;
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor * override;
+
+    static constexpr size_t MEM_SIZE = 812ull * 1024 * 1024;
+    static constexpr size_t SCRATCH_SIZE = 1844ull * 1024 * 1024;
+    QwenMoeConfig config;
+    QwenMoeModel transformer;
+  
   private:
     ModelContext ctx_;
     std::vector<std::pair<std::string, ggml_tensor *>> state_dict_;

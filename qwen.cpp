@@ -476,6 +476,66 @@ auto QwenMLP::forward(ModelContext *ctx, ggml_tensor *hidden_states) const -> gg
   return output;
 }
 
+auto Qwen2MoeSparseMoeBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, int num_experts, int num_experts_per_tok) const -> ggml_tensor *{
+  const int64_t n_tokens = hidden_states->ne[1];
+  const int n_expert = num_experts;
+
+  ggml_context *gctx = ctx->ctx_b.get();
+
+  ggml_tensor *logits = gate.forward(ctx, hidden_states); // [n_tokens, num_experts]
+  ggml_tensor *probs = ggml_soft_max(gctx, logits); // [n_tokens, num_experts]
+
+  // select experts
+  ggml_tensor * selected_experts = ggml_top_k(gctx, probs, num_experts_per_tok); // [n_tokens, num_experts_per_tok]
+
+  ggml_tensor * weights = ggml_get_rows(gctx, 
+      ggml_reshape_3d(gctx, probs, 1, n_expert, n_tokens), selected_experts);
+
+  weights = ggml_reshape_2d(gctx, weights, num_experts_per_tok, n_tokens);  // [n_tokens, num_experts_per_tok]
+
+  if(norm_topk_prob)
+  {
+      ggml_tensor * weights_sum = ggml_sum_rows(gctx, weights);
+      weights = ggml_div(gctx, weights, weights_sum); // [n_tokens, num_experts_per_tok]
+  }
+
+  // compute expert outputs
+  ggml_tensor *moe_out = nullptr;
+
+  for(int i = 0; i < num_experts_per_tok; i++)
+  {
+      ggml_tensor * cur_expert;
+      ggml_tensor * cur_up = ggml_mul_mat_id(gctx, expert_ups.data(), n_expert, selected_experts, i, hidden_states);
+      ggml_tensor * cur_gate = ggml_mul_mat_id(gctx, expert_gates.data(), n_expert, selected_experts, i, hidden_states);
+
+      cur_gate = ggml_silu(gctx, cur_gate);
+      cur_expert = ggml_mul(gctx, cur_up, cur_gate); // [n_tokens, n_embd]
+      cur_expert = ggml_mul_mat_id(gctx, expert_downs.data(), n_expert, selected_experts, i, cur_expert); // [n_tokens, n_embd]
+
+      cur_expert = ggml_mul(gctx, cur_expert,
+                  ggml_view_2d(gctx, weights, 1, n_tokens, weights->nb[1], i * weights->nb[0]));
+      if (i == 0){
+        moe_out = cur_expert;
+      }else{
+        moe_out = ggml_add(gctx, moe_out, cur_expert);
+      }
+  }
+
+  // shared expert
+  ggml_tensor * shared_expert_output = shared_expert.forward(ctx, hidden_states);
+  ggml_tensor * shared_expert_gate_output = shared_expert_gate.forward(ctx, hidden_states);
+
+  ggml_tensor * logits_shared_exp = ggml_silu(gctx, shared_expert_gate_output); // sigmoid
+  shared_expert_gate_output = ggml_div(gctx, logits_shared_exp, shared_expert_gate_output);
+
+  ggml_tensor * final_hidden_states = ggml_mul(gctx, shared_expert_output , shared_expert_gate_output);
+
+  final_hidden_states = ggml_add(gctx, final_hidden_states, moe_out);
+  
+  // may be need reshape 
+  return final_hidden_states;
+}
+
 auto QwenBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
 
@@ -487,6 +547,22 @@ auto QwenBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tens
   residual = hidden_states;
   hidden_states = post_attention_layernorm.forward(ctx, hidden_states, 1e-6f);
   hidden_states = mlp.forward(ctx, hidden_states);
+  hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
+  return hidden_states;
+}
+
+auto QwenMoeBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_ctx , int num_experts=60, int num_experts_per_tok=4) const -> ggml_tensor * {
+  ggml_context *gctx = ctx->ctx_b.get();
+
+  ggml_tensor *residual = hidden_states;
+  hidden_states = input_layernorm.forward(ctx, hidden_states, 1e-6f);
+  hidden_states = attn.forward(ctx, hidden_states, KQ_pos, n_ctx); // FAILE HERE  a->ne[2] == b->ne[0]
+
+  hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
+
+  residual = hidden_states;
+  hidden_states = post_attention_layernorm.forward(ctx, hidden_states, 1e-6f);
+  hidden_states = mlp.forward(ctx, hidden_states, num_experts, num_experts_per_tok);
   hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
   return hidden_states;
 }
@@ -506,6 +582,28 @@ auto QwenModel::forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *
   for (const auto &layer : layers) {
     ggml_set_scratch(gctx, ctx->scratch);
     hidden_states = layer.forward(ctx, hidden_states, KQ_pos, n_ctx);
+  }
+  ggml_scratch empty_scratch = {0, 0, nullptr};
+  ggml_set_scratch(gctx, empty_scratch);
+  hidden_states = norm.forward(ctx, hidden_states, 1e-6f);
+  return hidden_states;
+}
+
+QwenMoeModel::QwenMoeModel(ModelContext *ctx, const QwenMoeConfig &config)
+  : embed_tokens(ctx, config.vocab_size, config.hidden_size), norm(ctx, config.hidden_size) {
+  layers.reserve(config.num_hidden_layers);
+  for (int layer_id = 0; layer_id < config.num_hidden_layers; layer_id++) {
+    layers.emplace_back(ctx, config.hidden_size, config.num_attention_heads, config.num_kv_heads,
+      config.intermediate_size, config.moe_intermediate_size, config.shared_expert_intermediate_size, config.num_experts, config.num_experts_per_tok, config.max_length);
+  }
+}
+
+auto QwenMoeModel::forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx,  int num_experts, int num_experts_per_tok) const -> ggml_tensor * {
+  ggml_context *gctx = ctx->ctx_b.get();
+  ggml_tensor *hidden_states = embed_tokens.forward(ctx, input_ids);
+  for (const auto &layer : layers) {
+    ggml_set_scratch(gctx, ctx->scratch);
+    hidden_states = layer.forward(ctx, hidden_states, KQ_pos, n_ctx, num_experts, num_experts_per_tok);
   }
   ggml_scratch empty_scratch = {0, 0, nullptr};
   ggml_set_scratch(gctx, empty_scratch);
@@ -586,9 +684,99 @@ QwenForCausalLM::QwenForCausalLM(const QwenConfig &config)
   }
   state_dict_.emplace_back("model.norm.weight", transformer.norm.weight);
   state_dict_.emplace_back("lm_head.weight", lm_head.weight);
+
+}
+
+QwenMoeForCausalLM::QwenMoeForCausalLM(const QwenMoeConfig &config)
+  : QwenForCausalLM(config), config(config) {
+
+  std::cout<<"[tmp]check moe_intermediate_size: "<< config.moe_intermediate_size <<std::endl;
+  std::cout<<"[tmp]check shared_expert_intermediate_size: "<< config.shared_expert_intermediate_size <<std::endl;
+  std::cout<<"[tmp]check num_experts: "<< config.num_experts <<std::endl;
+  std::cout<<"[tmp]check num_experts_per_tok: "<< config.num_experts_per_tok <<std::endl;
+  std::cout<<"[tmp]check norm_topk_prob: "<< config.norm_topk_prob <<std::endl;
+
+  ctx_.compute_buffer.resize(MEM_SIZE);
+  ctx_.scratch_buffer.resize(SCRATCH_SIZE);
+  ctx_.scratch = {0, ctx_.scratch_buffer.size(), ctx_.scratch_buffer.data()};
+#ifdef GGML_USE_CUBLAS
+  ggml_cuda_set_scratch_size(SCRATCH_SIZE);
+#endif
+  constexpr size_t tensor_ovhd = GGML_TENSOR_SIZE + GGML_OBJECT_SIZE;
+  // const size_t ctx_w_size = (3 + config.num_hidden_layers * 12) * tensor_ovhd;  // origin 
+  // const size_t ctx_w_size = (3 + config.num_hidden_layers * (17 + 3 * config.num_experts)) * tensor_ovhd; // chatllm实现
+  const size_t ctx_w_size = (3 + config.num_hidden_layers * (14 + 3 * config.num_experts)) * tensor_ovhd;
+  const size_t ctx_kv_size = 2 * config.num_hidden_layers *
+                             (config.max_length * config.hidden_size / config.num_attention_heads * config.num_kv_heads * ggml_type_size(GGML_TYPE_F16) + tensor_ovhd);
+  // std::cout<<ctx_w_size << std::endl;
+  // std::cout<<ctx_kv_size << std::endl;
+  ctx_.dtype = config.dtype;
+  ctx_.ctx_w = make_unique_ggml_context(ctx_w_size, nullptr, true);
+  ctx_.ctx_kv = make_unique_ggml_context(ctx_kv_size + 1 * MB, nullptr, false); // 1MB extra for MPS
+
+  transformer = QwenMoeModel(&ctx_, config);
+  lm_head = Linear(&ctx_, config.hidden_size, config.vocab_size, false);
+  QWEN_CHECK(ggml_used_mem(ctx_.ctx_w.get()) == ggml_get_mem_size(ctx_.ctx_w.get())) << "corrupted model weights";
+  QWEN_CHECK(ggml_used_mem(ctx_.ctx_kv.get()) == ctx_kv_size) << "corrupted kv cache";
+
+  // build state_dict
+  state_dict_.reserve(3 + config.num_hidden_layers * (14 + 3 * config.num_experts));
+  state_dict_.emplace_back("model.embed_tokens.weight", transformer.embed_tokens.weight);
+
+  for (int i = 0; i < config.num_hidden_layers; i++) {
+    std::string layer_prefix = "model.layers." + std::to_string(i) + '.';
+    state_dict_.emplace_back(layer_prefix + "input_layernorm.weight", transformer.layers[i].input_layernorm.weight);
+    
+    state_dict_.emplace_back(layer_prefix + "self_attn.q_proj.weight",
+                             transformer.layers[i].attn.q_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "self_attn.q_proj.bias",
+                             transformer.layers[i].attn.q_proj.bias);
+
+    state_dict_.emplace_back(layer_prefix + "self_attn.k_proj.weight",
+                             transformer.layers[i].attn.k_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "self_attn.k_proj.bias",
+                             transformer.layers[i].attn.k_proj.bias);
+
+    state_dict_.emplace_back(layer_prefix + "self_attn.v_proj.weight",
+                             transformer.layers[i].attn.v_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "self_attn.v_proj.bias",
+                             transformer.layers[i].attn.v_proj.bias);
+
+    state_dict_.emplace_back(layer_prefix + "self_attn.o_proj.weight",
+                             transformer.layers[i].attn.o_proj.weight);
+
+    state_dict_.emplace_back(layer_prefix + "post_attention_layernorm.weight",
+                             transformer.layers[i].post_attention_layernorm.weight);
+
+    state_dict_.emplace_back(layer_prefix + "mlp.gate.weight", transformer.layers[i].mlp.gate.weight);
+
+    for (int j = 0; j < config.num_experts; j++){
+        std::string prefix = layer_prefix + "mlp.experts." + std::to_string(j) + '.';
+        state_dict_.emplace_back(prefix+"gate_proj.weight", transformer.layers[i].mlp.experts[j].gate_proj.weight);
+        state_dict_.emplace_back(prefix+"up_proj.weight", transformer.layers[i].mlp.experts[j].up_proj.weight);
+        state_dict_.emplace_back(prefix+"down_proj.weight", transformer.layers[i].mlp.experts[j].down_proj.weight);
+    }
+    state_dict_.emplace_back(layer_prefix + "mlp.shared_expert.gate_proj.weight", transformer.layers[i].mlp.shared_expert.gate_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "mlp.shared_expert.up_proj.weight", transformer.layers[i].mlp.shared_expert.up_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "mlp.shared_expert.down_proj.weight", transformer.layers[i].mlp.shared_expert.down_proj.weight);
+    state_dict_.emplace_back(layer_prefix + "mlp.shared_expert_gate.weight", transformer.layers[i].mlp.shared_expert_gate.weight);
+  }
+  state_dict_.emplace_back("model.norm.weight", transformer.norm.weight);
+  state_dict_.emplace_back("lm_head.weight", lm_head.weight);
 }
 
 QwenForCausalLM::~QwenForCausalLM() {
+  for (auto &item : state_dict_) {
+    tensor_to_cpu(item.second);
+  }
+
+  for (auto &layer : transformer.layers) {
+    tensor_to_cpu(layer.attn.k_cache);
+    tensor_to_cpu(layer.attn.v_cache);
+  }
+}
+
+QwenMoeForCausalLM::~QwenMoeForCausalLM() {
   for (auto &item : state_dict_) {
     tensor_to_cpu(item.second);
   }
@@ -606,7 +794,9 @@ auto QwenForCausalLM::generate_next_token(
   int n_ctx
 ) -> int32_t {
   ctx_.ctx_b = make_unique_ggml_context(ctx_.compute_buffer.size(), ctx_.compute_buffer.data(), false);
-  ctx_.gf = ggml_new_graph(ctx_.ctx_b.get());
+  // ctx_.gf = ggml_new_graph(ctx_.ctx_b.get());
+  size_t GRAPH_SIZE = 4096 * 4;
+  ctx_.gf = ggml_new_graph_custom(ctx_.ctx_b.get(), GRAPH_SIZE, false);
 
   int n_threads = gen_config.num_threads; // user defined
   if (n_threads <= 0) {
@@ -630,12 +820,14 @@ auto QwenForCausalLM::generate_next_token(
   }
 
   ggml_tensor *lm_logits = forward(&ctx_, curr_input_ids, KQ_pos, n_ctx);
-  lm_logits->backend = GGML_BACKEND_CPU;
+  // lm_logits->backend = GGML_BACKEND_CPU;
+  lm_logits->backend = GGML_BACKEND_CPU; // newer ggml version
   if (KQ_pos) {
     tensor_to_cpu(KQ_pos);
   }
 
   ggml_build_forward_expand(ctx_.gf, lm_logits);
+  // ggml_graph_compute_with_ctx(ctx_.ctx_b.get(), ctx_.gf, n_threads); //no use
 #ifdef GGML_USE_METAL
   ggml_metal_graph_compute(ctx_.ctx_metal.get(), ctx_.gf);
 #else
@@ -805,6 +997,27 @@ auto QwenForCausalLM::generate(
 }
 
 auto QwenForCausalLM::load(ModelLoader &loader) -> void {
+  // std::cout << "Debug: state_dict size: " << state_dict_.size() <<std::endl;
+  for (auto &item : state_dict_) {
+    const std::string &name = item.first;
+    ggml_tensor *tensor = item.second;
+    loader.read_tensor(name, tensor);
+    if (name != "model.embed_tokens.weight") {
+      tensor_to_device(tensor);
+    }
+  }
+
+  for (auto &layer : transformer.layers) {
+    tensor_to_device(layer.attn.k_cache);
+    tensor_to_device(layer.attn.v_cache);
+  }
+
+  ctx_.weight_buffer = std::string_view(loader.data, loader.size);
+  ctx_.init_device_context();
+}
+
+auto QwenMoeForCausalLM::load(ModelLoader &loader) -> void {
+  std::cout << "actual state_dict size: " << state_dict_.size() <<std::endl;
   for (auto &item : state_dict_) {
     const std::string &name = item.first;
     ggml_tensor *tensor = item.second;
@@ -829,6 +1042,25 @@ auto QwenForCausalLM::forward(
   ggml_tensor *KQ_pos,
   int n_ctx
 ) const -> ggml_tensor * {
+  // std::cout<< "start old transformer forward"<<std::endl;
+  ggml_tensor *transformer_outputs = transformer.forward(ctx, input_ids, KQ_pos, n_ctx);
+  // NOTE: only compute next_token_logits for the last token
+  if (input_ids->ne[0] > 1) {
+    transformer_outputs = tensor_assign_buffers(
+      ggml_view_1d(ctx->ctx_b.get(), transformer_outputs, config.hidden_size,
+                   (input_ids->ne[0] - 1) * config.hidden_size * ggml_element_size(transformer_outputs)));
+  }
+  ggml_tensor *lm_logits = lm_head.forward(ctx, transformer_outputs);
+  return lm_logits;
+}
+
+auto QwenMoeForCausalLM::forward(
+  ModelContext *ctx,
+  ggml_tensor *input_ids,
+  ggml_tensor *KQ_pos,
+  int n_ctx
+) const -> ggml_tensor * {
+  // std::cout<< "start transformer forward"<<std::endl;
   ggml_tensor *transformer_outputs = transformer.forward(ctx, input_ids, KQ_pos, n_ctx);
   // NOTE: only compute next_token_logits for the last token
   if (input_ids->ne[0] > 1) {
@@ -851,17 +1083,22 @@ Pipeline::Pipeline(const std::string &path, const std::string &tiktoken_path, in
   QWEN_CHECK(magic == "ggml") << "model file is broken (bad magic)";
 
   // load config
+  // TODO: switch the moe based on the model binary read from the file: also need refactor convert.py
   QwenConfig config = loader.read_basic<QwenConfig>();
+  // QwenMoeConfig config = loader.read_basic<QwenMoeConfig>();
+
   if (max_length > 0) {
       QWEN_CHECK(max_length <= config.max_length)
           << "Requested max_length (" << max_length << ") exceeds the max possible model sequence length ("
           << config.max_length;
       config.max_length = max_length;
   }
-  
+
   // load model
   model = std::make_unique<QwenForCausalLM>(config);
+  // model = std::make_unique<QwenMoeForCausalLM>(config);
   model->load(loader);
+  std::cout<< "weight load complish"<<std::endl;
 
   // load tokenizer
   tokenizer = std::make_unique<QwenTokenizer>(tiktoken_path, config);
