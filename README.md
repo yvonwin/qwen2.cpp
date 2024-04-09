@@ -6,6 +6,7 @@ This is an independent C++ implementation of [Qwen1.5](https://github.com/QwenLM
 - **`2023/03/26`**  Update to Qwen1.5. Basic functionality has been successfully ported. 
 - **`2023/03/28`**  Introduced a system prompt feature for user input; Add cli and web demo, support oai server.
 - **`2023/04/07`** Support [Qwen1.5-32B](https://huggingface.co/Qwen/Qwen1.5-32B-Chat).
+- **`2023/04/09`** Support [Qwen1.5-Moe2.7B](https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat).
 
 ## Features
 
@@ -73,13 +74,6 @@ cmake -B build
 cmake --build build -j --config Release
 ```
 
-If you want to run the 32B model, you need to follow these steps:
-
-> Open the ggml.c file.
-> Locate line 15870.
-> Comment out this line of code.
-> Please note, this is a temporary solution, and I am working hard to find a better way to handle this issue.
-
 Now you may chat with the quantized Qwen-7B-Chat model by running:
 ```sh
 ./build/bin/main -m qwen2_32b-ggml.bin  -p 你想活出怎样的人生 -s "你是一个猫娘"
@@ -90,12 +84,20 @@ Now you may chat with the quantized Qwen-7B-Chat model by running:
 # 总的来说，我想要活出一种平衡和谐的生活，既有猫的自由和活力，又有温暖的家庭和朋友带来的幸福。
 ```
 
-
 To run the model in interactive mode, add the `-i` flag. For example:
 ```sh
 ./build/bin/main -m qwen2_1.8b-ggml.bin  -i
 ```
 In interactive mode, your chat history will serve as the context for the next-round conversation.
+
+Alternatively, you can configure the application to run in 'generate' mode.
+
+```sh
+/build/bin/main -m moe-ggml.bin --mode generate -p "how to slain a dragon?" --max_length 256
+
+#The first step in slaying a dragon is to gather information about the dragon. This can include researching the dragon's habitat, behavior, and diet. Once you have gathered enough information about the dragon, you can then plan your attack. This may involve studying the dragon's weaknesses and finding a suitable weapon to use against the dragon. Once you have a plan in place, you can then begin your attack on the dragon. This may involve using a combination of weapons and tactics to take down the dragon. Once you have successfully slain the dragon, you can then celebrate your victory and reflect on the lessons you have learned from the experience of slaying the dragon.
+```
+
 
 Run `./build/bin/main -h` to explore more options!
 
@@ -285,8 +287,8 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 ## TODO
 
 - [x] Qwen1.5 32b
-- [ ] sync ggml. [WIP]
-- [ ] Qwen1.5 moe
+- [ ] sync ggml. The interface of the Metal API has changed significantly in later versions, so we will keep this version for now.
+- [x] Qwen1.5 moe. Only work on cpu, but it's fast.
 - [ ] Rag explore
 
 ## Acknowledgements
