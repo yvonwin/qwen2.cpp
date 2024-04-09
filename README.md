@@ -1,12 +1,14 @@
 # qwen2.cpp
 
-This is an independent C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5). This project extends the official [qwen.cpp](https://github.com/QwenLM/qwen.cpp) implementation, which is no longer actively maintained。 It is designed for real-time chatting on your MacBook.
+This project is an independent C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5). It extends the official [qwen.cpp](https://github.com/QwenLM/qwen.cpp) implementation, which is no longer actively maintained. This version is specifically designed for real-time chatting on MacBook devices.
+
+![](docs/main_demo.jpg)
 
 ## Updates
 - **`2023/03/26`**  Update to Qwen1.5. Basic functionality has been successfully ported. 
 - **`2023/03/28`**  Introduced a system prompt feature for user input; Add cli and web demo, support oai server.
 - **`2023/04/07`** Support [Qwen1.5-32B](https://huggingface.co/Qwen/Qwen1.5-32B-Chat).
-- **`2023/04/09`** Support [Qwen1.5-Moe2.7B](https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat).
+- **`2023/04/09`** Support [Qwen1.5-MoE2.7B](https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat).
 
 ## Features
 
@@ -19,7 +21,7 @@ Highlights:
 Support Matrix:
 * Hardwares: x86/arm CPU, NVIDIA GPU
 * Platforms: Linux, MacOS
-* Models: [Qwen1.5](https://github.com/QwenLM/Qwen1.5)
+* Models: [Qwen1.5](https://github.com/QwenLM/Qwen1.5) family
 
 ## Test in colab
 
@@ -51,11 +53,12 @@ python3 qwen_cpp/convert.py -i Qwen/Qwen1.5-1.8B-Chat -t q4_0 -o qwen2_1.8b-ggml
 
 The original model (`-i <model_name_or_path>`) can be a HuggingFace model name or a local path to your pre-downloaded model. Currently supported models are:
 * Qwen1.5-0.5B: `Qwen/Qwen1.5-0.5B-Chat`
-* Qwen1.5-1.8B: `Qwen/Qwen1.5-1.8B`
+* Qwen1.5-1.8B: `Qwen/Qwen1.5-1.8B-Chat`
 * Qwen1.5-7B: `Qwen/Qwen1.5-7B-Chat`
 * Qwen1.5-14B: `Qwen/Qwen1.5-14B-Chat`
 * Qwen1.5-32B: `Qwen/Qwen1.5-32B-Chat`
-& Qwen1.5-72B: OOM when convert
+* Qwen1.5-72B: `Qwen/Qwen1.5-32B-Chat`
+* Qwen1.5-Moe2.7B: `Qwen/Qwen1.5-MoE-A2.7B-Chat`
 
 You are free to try any of the below quantization types by specifying `-t <type>`:
 * `q4_0`: 4-bit integer quantization with fp16 scales.
@@ -89,15 +92,6 @@ To run the model in interactive mode, add the `-i` flag. For example:
 ./build/bin/main -m qwen2_1.8b-ggml.bin  -i
 ```
 In interactive mode, your chat history will serve as the context for the next-round conversation.
-
-Alternatively, you can configure the application to run in 'generate' mode.
-
-```sh
-/build/bin/main -m moe-ggml.bin --mode generate -p "how to slain a dragon?" --max_length 256
-
-#The first step in slaying a dragon is to gather information about the dragon. This can include researching the dragon's habitat, behavior, and diet. Once you have gathered enough information about the dragon, you can then plan your attack. This may involve studying the dragon's weaknesses and finding a suitable weapon to use against the dragon. Once you have a plan in place, you can then begin your attack on the dragon. This may involve using a combination of weapons and tactics to take down the dragon. Once you have successfully slain the dragon, you can then celebrate your victory and reflect on the lessons you have learned from the experience of slaying the dragon.
-```
-
 
 Run `./build/bin/main -h` to explore more options!
 
@@ -287,11 +281,10 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 ## TODO
 
 - [x] Qwen1.5 32b
+- [x] Qwen1.5 moe
 - [ ] sync ggml. The interface of the Metal API has changed significantly in later versions, so we will keep this version for now.
-- [x] Qwen1.5 moe. Only work on cpu, but it's fast.
 - [ ] Rag explore
 
 ## Acknowledgements
 
-* This project is greatly inspired by [qwen.cpp](https://github.com/QwenLM/qwen.cpp) [llama.cpp](https://github.com/ggerganov/llama.cpp), [chatglm.cpp](https://github.com/li-plus/chatglm.cpp), [ggml](https://github.com/ggerganov/ggml), [tiktoken](https://github.com/openai/tiktoken), [tokenizer](https://github.com/sewenew/tokenizer), [cpp-base64](https://github.com/ReneNyffenegger/cpp-base64), [re2](https://github.com/google/re2) and [unordered_dense](https://github.com/martinus/unordered_dense).
-* Thanks to the excellent work done on [chatglm.cpp](https://github.com/li-plus/chatglm.cpp)
+* This project is greatly inspired by [chatllm.cpp](https://github.com/foldl/chatllm.cpp) [qwen.cpp](https://github.com/QwenLM/qwen.cpp) [llama.cpp](https://github.com/ggerganov/llama.cpp), [chatglm.cpp](https://github.com/li-plus/chatglm.cpp), [ggml](https://github.com/ggerganov/ggml), [tiktoken](https://github.com/openai/tiktoken), [tokenizer](https://github.com/sewenew/tokenizer), [cpp-base64](https://github.com/ReneNyffenegger/cpp-base64), [re2](https://github.com/google/re2) and [unordered_dense](https://github.com/martinus/unordered_dense).
