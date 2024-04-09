@@ -1,6 +1,6 @@
 # qwen2.cpp
 
-This is an independent C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5). This project extends the official [qwen.cpp](https://github.com/QwenLM/qwen.cpp) implementation, which is no longer actively maintained., which is no longer maintained。 It is designed for real-time chatting on your MacBook.
+This is an independent C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5). This project extends the official [qwen.cpp](https://github.com/QwenLM/qwen.cpp) implementation, which is no longer actively maintained。 It is designed for real-time chatting on your MacBook.
 
 ## Updates
 - **`2023/03/26`**  Update to Qwen1.5. Basic functionality has been successfully ported. 
