@@ -288,16 +288,16 @@ class Qwen2MOEConverter:
             config.num_key_value_heads,
             config.num_hidden_layers,
             config.intermediate_size,
-            config.moe_intermediate_size,
-            config.shared_expert_intermediate_size,
-            config.num_experts_per_tok,
-            config.num_experts,
-            1 if config.norm_topk_prob else 0,  
             tokenizer.model_max_length,
             config.eos_token_id,                             # eos 151645
             list(tokenizer.added_tokens_decoder.keys())[0], # pad 151643
             list(tokenizer.added_tokens_decoder.keys())[1], # im_start 151644
             list(tokenizer.added_tokens_decoder.keys())[2], # im_end 151645
+            config.moe_intermediate_size,
+            config.shared_expert_intermediate_size,
+            config.num_experts,
+            config.num_experts_per_tok,
+            1 if config.norm_topk_prob else 0,  
         ]
         f.write(struct.pack("i" * len(config_values), *config_values))
 
@@ -316,11 +316,6 @@ class Qwen2MOEConverter:
                 f"model.layers.{i}.self_attn.o_proj.weight",
                 f"model.layers.{i}.post_attention_layernorm.weight",
                 f"model.layers.{i}.mlp.gate.weight",
-                f"model.layers.{i}.mlp.shared_expert.down_proj.weight",
-                f"model.layers.{i}.mlp.shared_expert.gate_proj.weight",
-                f"model.layers.{i}.mlp.shared_expert.up_proj.weight",
-                f"model.layers.{i}.mlp.shared_expert_gate.weight",
-
             ]
             for j in range(model.num_experts):
                 weight_names += [
@@ -328,6 +323,12 @@ class Qwen2MOEConverter:
                     f"model.layers.{i}.mlp.experts.{j}.up_proj.weight",
                     f"model.layers.{i}.mlp.experts.{j}.down_proj.weight",
                 ]
+            weight_names += [
+                f"model.layers.{i}.mlp.shared_expert.gate_proj.weight",
+                f"model.layers.{i}.mlp.shared_expert.up_proj.weight",
+                f"model.layers.{i}.mlp.shared_expert.down_proj.weight",
+                f"model.layers.{i}.mlp.shared_expert_gate.weight",
+            ]
         weight_names += [
             "model.norm.weight",
             "lm_head.weight",
@@ -371,7 +372,7 @@ def main():
     parser.add_argument(
         "-i",
         "--model_name_or_path",
-        default="Qwen/Qwen1.5-1.8B-Chat", # Qwen/Qwen1.5-0.5B-Chat
+        default="Qwen/Qwen1.5-1.8B-Chat", # Qwen/Qwen1.5-0.5B-Chat; Qwen/Qwen1.5-MoE-A2.7B-Chat
         type=str,
         help="Model name or path used in AutoModel.from_pretrained",
     )
