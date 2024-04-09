@@ -690,11 +690,11 @@ QwenForCausalLM::QwenForCausalLM(const QwenConfig &config)
 QwenMoeForCausalLM::QwenMoeForCausalLM(const QwenMoeConfig &config)
   : QwenForCausalLM(config), config(config) {
 
-  std::cout<<"[tmp]check moe_intermediate_size: "<< config.moe_intermediate_size <<std::endl;
-  std::cout<<"[tmp]check shared_expert_intermediate_size: "<< config.shared_expert_intermediate_size <<std::endl;
-  std::cout<<"[tmp]check num_experts: "<< config.num_experts <<std::endl;
-  std::cout<<"[tmp]check num_experts_per_tok: "<< config.num_experts_per_tok <<std::endl;
-  std::cout<<"[tmp]check norm_topk_prob: "<< config.norm_topk_prob <<std::endl;
+  // std::cout<<"[tmp]check moe_intermediate_size: "<< config.moe_intermediate_size <<std::endl;
+  // std::cout<<"[tmp]check shared_expert_intermediate_size: "<< config.shared_expert_intermediate_size <<std::endl;
+  // std::cout<<"[tmp]check num_experts: "<< config.num_experts <<std::endl;
+  // std::cout<<"[tmp]check num_experts_per_tok: "<< config.num_experts_per_tok <<std::endl;
+  // std::cout<<"[tmp]check norm_topk_prob: "<< config.norm_topk_prob <<std::endl;
 
   ctx_.compute_buffer.resize(MEM_SIZE);
   ctx_.scratch_buffer.resize(SCRATCH_SIZE);
@@ -1017,7 +1017,7 @@ auto QwenForCausalLM::load(ModelLoader &loader) -> void {
 }
 
 auto QwenMoeForCausalLM::load(ModelLoader &loader) -> void {
-  std::cout << "actual state_dict size: " << state_dict_.size() <<std::endl;
+  // std::cout << "actual state_dict size: " << state_dict_.size() <<std::endl;
   for (auto &item : state_dict_) {
     const std::string &name = item.first;
     ggml_tensor *tensor = item.second;
@@ -1075,6 +1075,14 @@ auto QwenMoeForCausalLM::forward(
 // ===== pipeline =====
 
 Pipeline::Pipeline(const std::string &path, const std::string &tiktoken_path, int max_length) {
+  auto _update_config_max_length = [](QwenConfig &config, int max_length) {
+      if (max_length > 0) {
+          QWEN_CHECK(max_length <= config.max_length)
+              << "Requested max_length (" << max_length << ") exceeds the max possible model sequence length ("
+              << config.max_length;
+          config.max_length = max_length;
+      }
+  };
   mapped_file = std::make_unique<MappedFile>(path);
   ModelLoader loader(std::string_view((char *)mapped_file->data, mapped_file->size));
 
@@ -1082,26 +1090,32 @@ Pipeline::Pipeline(const std::string &path, const std::string &tiktoken_path, in
   std::string magic = loader.read_string(4);
   QWEN_CHECK(magic == "ggml") << "model file is broken (bad magic)";
 
-  // load config
-  // TODO: switch the moe based on the model binary read from the file: also need refactor convert.py
-  QwenConfig config = loader.read_basic<QwenConfig>();
-  // QwenMoeConfig config = loader.read_basic<QwenMoeConfig>();
+  // load model type
+  ModelType model_type = (ModelType)loader.read_basic<int>();
+  // load version
+  int version = loader.read_basic<int>();
 
-  if (max_length > 0) {
-      QWEN_CHECK(max_length <= config.max_length)
-          << "Requested max_length (" << max_length << ") exceeds the max possible model sequence length ("
-          << config.max_length;
-      config.max_length = max_length;
+  std::unique_ptr<QwenConfig> config;
+  if (model_type == ModelType::QWEN2) {
+      // load config
+      config = std::make_unique<QwenConfig>(loader.read_basic<QwenConfig>());
+      _update_config_max_length(*config, max_length);
+      model = std::make_unique<QwenForCausalLM>(*config);
+  }
+  else if (model_type == ModelType::QWEN2MOE)
+  {
+      config = std::make_unique<QwenMoeConfig>(loader.read_basic<QwenMoeConfig>());
+      _update_config_max_length(*config, max_length);
+      QwenMoeConfig* moe_config = static_cast<QwenMoeConfig*>(config.get());
+      model = std::make_unique<QwenMoeForCausalLM>(*moe_config);
   }
 
   // load model
-  model = std::make_unique<QwenForCausalLM>(config);
-  // model = std::make_unique<QwenMoeForCausalLM>(config);
   model->load(loader);
-  std::cout<< "weight load complish"<<std::endl;
+  // std::cout<< "weight load complish"<<std::endl;
 
   // load tokenizer
-  tokenizer = std::make_unique<QwenTokenizer>(tiktoken_path, config);
+  tokenizer = std::make_unique<QwenTokenizer>(tiktoken_path, *config);
 }
 
 auto Pipeline::generate(

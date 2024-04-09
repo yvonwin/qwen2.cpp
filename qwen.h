@@ -271,7 +271,13 @@ struct TokenIdScore {
   }
 };
 
-// ===== Qwen-7B =====
+// ===== Qwen1.5 =====
+
+enum class ModelType {
+    QWEN1 = 1,
+    QWEN2 = 2,
+    QWEN2MOE = 3,
+};
 
 struct QwenConfig {
   // common attributes

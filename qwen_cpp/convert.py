@@ -37,6 +37,11 @@ class GGMLType(Enum):
     Q5_1 = 7
     Q8_0 = 8
 
+class ModelType(Enum):
+    QWEN1 = 1
+    QWEN2 = 2
+    QWEN2MOE = 3
+
 
 def quantize_q8_0(tensor: torch.Tensor) -> torch.CharTensor:
     # equivalent to ggml_quantize_q8_0 in ggml.c
@@ -221,9 +226,11 @@ class QwenConverter:
         dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
 
 class Qwen2Converter:
+    MODEL_TYPE = ModelType.QWEN2
     @classmethod
     def convert(cls, f, model, tokenizer, ggml_type):
         f.write(b"ggml")  # magic
+        f.write(struct.pack("ii", cls.MODEL_TYPE.value, 1))  # model type & version
         cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type) # generation_config is not use now.
         cls.dump_model(f, model, ggml_type)
 
@@ -272,9 +279,11 @@ class Qwen2Converter:
         dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
 
 class Qwen2MOEConverter:
+    MODEL_TYPE = ModelType.QWEN2MOE
     @classmethod
     def convert(cls, f, model, tokenizer, ggml_type):
         f.write(b"ggml")  # magic
+        f.write(struct.pack("ii", cls.MODEL_TYPE.value, 1))  # model type & version
         cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type) # generation_config is not use now.
         cls.dump_model(f, model, ggml_type)
 
@@ -363,8 +372,8 @@ def convert(f: BinaryIO, model_name_or_path: str, dtype: str = "q4_0"):
         print('Convert Qwen1.5-Moe')
         Qwen2MOEConverter.convert(f, model, tokenizer, ggml_type)
     else:
-        print('Warning: Qwen1 ist not supported for inference now')
-        QwenConverter.convert(f, model, tokenizer, ggml_type)
+        print('Warning: Qwen1 ist not supported now')
+        # QwenConverter.convert(f, model, tokenizer, ggml_type)
 
 
 def main():
