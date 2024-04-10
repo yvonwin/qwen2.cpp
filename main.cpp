@@ -2,6 +2,13 @@
 #include <iomanip>
 #include <iostream>
 
+#ifdef _WIN32
+#include <codecvt>
+#include <fcntl.h>
+#include <io.h>
+#include <windows.h>
+#endif
+
 enum InferenceMode {
   INFERENCE_MODE_CHAT,
   INFERENCE_MODE_GENERATE,
@@ -102,15 +109,35 @@ static auto parse_args(int argc, char **argv) -> Args {
   std::vector<std::string> argv_vec;
   argv_vec.reserve(argc);
 
-  for (int i = 0; i < argc; i++) {
-    argv_vec.emplace_back(argv[i]);
-  }
+#ifdef _WIN32
+    LPWSTR *wargs = CommandLineToArgvW(GetCommandLineW(), &argc);
+    QWEN_CHECK(wargs) << "failed to retrieve command line arguments";
+
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    for (int i = 0; i < argc; i++) {
+        argv_vec.emplace_back(converter.to_bytes(wargs[i]));
+    }
+
+    LocalFree(wargs);
+#else
+    for (int i = 0; i < argc; i++) {
+        argv_vec.emplace_back(argv[i]);
+    }
+#endif
 
   return parse_args(argv_vec);
 }
 
 static auto get_utf8_line(std::string &line) -> bool {
-  return !!std::getline(std::cin, line);
+#ifdef _WIN32
+    std::wstring wline;
+    bool ret = !!std::getline(std::wcin, wline);
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>> converter;
+    line = converter.to_bytes(wline);
+    return ret;
+#else
+    return !!std::getline(std::cin, line);
+#endif
 }
 
 static inline void print_message(const qwen::ChatMessage &message) {
@@ -251,6 +278,10 @@ static auto chat(Args &args) -> void {
 }
 
 int main(int argc, char **argv) {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+    _setmode(_fileno(stdin), _O_WTEXT);
+#endif
   try {
     Args args = parse_args(argc, argv);
     chat(args);

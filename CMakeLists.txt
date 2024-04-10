@@ -42,6 +42,10 @@ file(GLOB CPP_SOURCES
 
 set_source_files_properties(${CPP_SOURCES} PROPERTIES COMPILE_FLAGS "-pedantic-errors")
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/source-charset:utf-8>")
+endif()
+
 add_library(qwen STATIC qwen.cpp)
 target_link_libraries(qwen PUBLIC re2::re2 ggml)
 

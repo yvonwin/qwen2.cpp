@@ -21,6 +21,16 @@
 #endif
 #endif
 
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <io.h>
+#include <stdio.h>
+#include <windows.h>
+#endif
+
 namespace qwen {
 
 ggml_tensor *tensor_assign_buffers(ggml_tensor *tensor) {
@@ -176,6 +186,8 @@ auto PerfStreamer::to_string() -> std::string const {
   return oss.str();
 }
 
+
+#if !defined(_WIN32)
 MappedFile::MappedFile(const std::string &path) {
   int fd = open(path.c_str(), O_RDONLY);
   QWEN_CHECK(fd > 0) << "cannot open file " << path << ": " << strerror(errno);
@@ -191,6 +203,32 @@ MappedFile::MappedFile(const std::string &path) {
 }
 
 MappedFile::~MappedFile() { QWEN_CHECK(munmap(data, size) == 0) << strerror(errno); }
+#else
+MappedFile::MappedFile(const std::string& path) {
+
+    int fd = open(path.c_str(), O_RDONLY);
+    QWEN_CHECK(fd > 0) << "cannot open file " << path << ": " << strerror(errno);
+
+    struct _stat64 sb;
+    QWEN_CHECK(_fstat64(fd, &sb) == 0) << strerror(errno);
+    size = sb.st_size;
+
+    HANDLE hFile = (HANDLE)_get_osfhandle(fd);
+
+    HANDLE hMapping = CreateFileMappingA(hFile, NULL, PAGE_READONLY, 0, 0, NULL);
+    QWEN_CHECK(hMapping != NULL) << strerror(errno);
+
+    data = (char*)MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
+    CloseHandle(hMapping);
+
+    QWEN_CHECK(data != NULL) << strerror(errno);
+
+    QWEN_CHECK(close(fd) == 0) << strerror(errno);
+}
+
+MappedFile::~MappedFile() { QWEN_CHECK(UnmapViewOfFile(data)) << strerror(errno); }
+
+#endif
 
 auto ModelLoader::seek(int64_t offset, int whence) -> void {
   if (whence == SEEK_SET) {
