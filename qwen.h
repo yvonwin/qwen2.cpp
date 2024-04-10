@@ -274,7 +274,7 @@ struct TokenIdScore {
 // ===== Qwen1.5 =====
 
 enum class ModelType {
-    QWEN1 = 1,
+    QWEN1 = 1,  // abort
     QWEN2 = 2,
     QWEN2MOE = 3,
 };
@@ -372,8 +372,8 @@ class QwenMLP {
   public:
     QwenMLP() = default;
     QwenMLP(ModelContext * ctx, int hidden_size, int intermediate_size)
-      : gate_proj(ctx, hidden_size, intermediate_size, false), // w2
-        up_proj(ctx, hidden_size, intermediate_size, false),  // w1
+      : gate_proj(ctx, hidden_size, intermediate_size, false),
+        up_proj(ctx, hidden_size, intermediate_size, false),
         down_proj(ctx, intermediate_size, hidden_size, false) {}
 
     auto forward(ModelContext *ctx, ggml_tensor *hidden_states) const -> ggml_tensor *;
@@ -468,7 +468,7 @@ class QwenMoeModel {
     QwenMoeModel(ModelContext *ctx, const QwenMoeConfig &config);
 
     // Attention: These parameters should not be set to fixed values. I did this for quick implementation.
-    auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx, int num_experts=60, int num_experts_per_tok=4) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx, int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
 
     Embedding embed_tokens;
     std::vector<QwenMoeBlock> layers;
@@ -528,8 +528,8 @@ class QwenMoeForCausalLM : public QwenForCausalLM {
     auto load(ModelLoader &loader) -> void override;
     auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor * override;
 
-    static constexpr size_t MEM_SIZE = 812ull * 1024 * 1024;
-    static constexpr size_t SCRATCH_SIZE = 1844ull * 1024 * 1024;
+    static constexpr size_t MEM_SIZE = 812ull * MB;
+    static constexpr size_t SCRATCH_SIZE = 1844ull * MB;
     QwenMoeConfig config;
     QwenMoeModel transformer;
   
