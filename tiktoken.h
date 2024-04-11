@@ -177,15 +177,10 @@ class tiktoken {
 					break;
 				}
 
-				if (allowed_special.count(special) == 1) {
-					#if ! defined(_WIN32)
-						return { std::move(special), re2::StringPiece(start, input.begin() - start - special.size()) }; // failed on windows building
-					#else
-						return { std::move(special), re2::StringPiece(input.data(), input.begin() - start - special.size()) }; // TODO test msvc use
-					#endif
+				if (allowed_special.count(special) == 1) {				
+					return { std::move(special), re2::StringPiece(&*start, input.begin() - start - special.size()) }; // failed on windows building
 				}
 			}
-
 			return { std::nullopt, input };
 		}
 
