@@ -9,6 +9,7 @@ This project is an independent C++ implementation of [Qwen1.5](https://github.co
 - **`2023/03/28`**  Introduced a system prompt feature for user input; Add cli and web demo, support oai server.
 - **`2023/04/07`** Support [Qwen1.5-32B](https://huggingface.co/Qwen/Qwen1.5-32B-Chat).
 - **`2023/04/09`** Support [Qwen1.5-MoE2.7B](https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat).
+- **`2023/04/11`** The platform has been updated to support Windows. It has been tested on Visual Studio 2022, and both CUDA and CPU functionalities are confirmed to work correctly.
 
 ## Features
 
