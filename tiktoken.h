@@ -178,8 +178,8 @@ class tiktoken {
 				}
 
 				if (allowed_special.count(special) == 1) {
-					// return { std::move(special), re2::StringPiece(start, input.begin() - start - special.size()) }; // failed on windows building
-					return { std::move(special), re2::StringPiece(input.data(), input.begin() - start - special.size()) };
+					// return { std::move(special), re2::StringPiece(start, input.begin() - start - special.size()) }; // work fine but faild build msvc
+					return { std::forward<decltype(special)>(special), re2::StringPiece(start, input.begin() - start - special.size()) }; // need to check msvc build./
 				}
 			}
 
