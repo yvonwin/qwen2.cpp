@@ -1,6 +1,6 @@
 # qwen2.cpp
 
-This project is an independent C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5). It extends the official [qwen.cpp](https://github.com/QwenLM/qwen.cpp) implementation, which is no longer actively maintained. This version is specifically designed for real-time chatting on MacBook devices.
+This project is an independent C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5).
 
 ![](docs/main_demo.jpg)
 
@@ -20,7 +20,7 @@ Highlights:
 
 Support Matrix:
 * Hardwares: x86/arm CPU, NVIDIA GPU
-* Platforms: Linux, MacOS
+* Platforms: Linux, MacOS, Winodws
 * Models: [Qwen1.5](https://github.com/QwenLM/Qwen1.5) family
 
 ## Test in colab
@@ -281,8 +281,8 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 ## TODO
 
 - [x] Qwen1.5 32b
-- [x] Qwen1.5 moe
-- [ ] sync ggml. The interface of the Metal API has changed significantly in later versions, so we will keep this version for now.
+- [x] Qwen1.5 A2.7b moe: It's necessary to modify the value of `GGML_MAX_SRC` from 10 to 62 for proper operation.
+- [ ] sync ggml: The interface of the Metal API and cuBLAS has changed significantly in later versions, so we will keep this version for now.
 - [ ] Rag explore
 
 ## Acknowledgements
