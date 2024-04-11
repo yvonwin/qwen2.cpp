@@ -225,7 +225,7 @@ static auto chat(Args &args) -> void {
 
     while (1) {
       std::string role;
-      if (messages.empty()){
+      if (!messages.empty()){
           role = qwen::ChatMessage::ROLE_USER;
       }
       else{

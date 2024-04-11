@@ -65,10 +65,10 @@ const std::string ChatMessage::ROLE_ASSISTANT = "assistant";
 const std::string ChatMessage::ROLE_SYSTEM = "system";
 
 void QwenTokenizer::check_chat_messages(const std::vector<ChatMessage> &messages) {
-   // the function not suit for message with system param
-    QWEN_CHECK(messages.size() % 2 == 1) << "invalid chat messages size " << messages.size();
-    for (size_t i = 0; i < messages.size(); i++) {
-        const std::string &target_role = (i % 2 == 0) ? ChatMessage::ROLE_USER : ChatMessage::ROLE_ASSISTANT;
+   // default we have system param
+    QWEN_CHECK(messages.size() % 2 == 0) << "invalid chat messages size " << messages.size();
+    for (size_t i = 1; i < messages.size(); i++) {
+        const std::string &target_role = (i % 2 == 1) ? ChatMessage::ROLE_USER : ChatMessage::ROLE_ASSISTANT;
         QWEN_CHECK(messages[i].role == target_role)
             << "expect messages[" << i << "].role to be " << target_role << ", but got " << messages[i].role;
     }
@@ -389,16 +389,23 @@ auto QwenTokenizer::decode(const std::vector<int> &ids) const -> std::string {
 }
 
 std::string QwenTokenizer::build_prompt(const std::vector<ChatMessage> &messages) {
+
   // check_chat_messages(messages); 
+
   std::ostringstream oss_prompt;
   oss_prompt << "<|im_start|>system\n" << messages.front().content << "<|im_end|>"; // apply system
   
-  for (size_t i = 0; i < messages.size() - 1; i += 2) { 
+  for (size_t i = 1; i < messages.size(); i += 1) { // get all history messages
     if(messages[i].role == ChatMessage::ROLE_USER){
-      oss_prompt << "\n<|im_start|>user\n" << messages[i].content << "<|im_end|>\n<|im_start|>assistant" << messages[i + 1].content << "<|im_end|>";
+      oss_prompt << "\n<|im_start|>user\n" << messages[i].content << "<|im_end|>\n<|im_start|>assistant\n";
+    }else{
+      oss_prompt << messages[i].content << "<|im_end|>";
     }
   }
-  oss_prompt << "\n<|im_start|>user\n" << messages.back().content <<  "<|im_end|>\n<|im_start|>assistant\n"; // last message
+
+  // oss_prompt << "\n<|im_start|>user\n" << messages.back().content <<  "<|im_end|>\n<|im_start|>assistant\n"; // old way: last message
+
+  // std::cout << oss_prompt.str()<<std::endl;
 
   return oss_prompt.str();
 }
