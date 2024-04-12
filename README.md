@@ -283,8 +283,9 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 
 - [x] Qwen1.5 32b
 - [x] Qwen1.5 A2.7b moe: It's necessary to modify the value of `GGML_MAX_SRC` from 10 to 62 for proper operation.
-- [ ] sync ggml: The interface of the Metal API and cuBLAS has changed significantly in later versions, so we will keep this version for now.
-- [ ] Rag explore
+- [ ] Sync ggml: The interface of the Metal API and cuBLAS has changed significantly in later versions, so we will keep this version for now.
+- [ ] Reduce unnecessary third-party dependencies.
+- [ ] RAG explore.
 
 ## Acknowledgements
 
