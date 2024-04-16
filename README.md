@@ -257,6 +257,22 @@ output time: 15149.7 ms / 159 tokens (95.281 ms/token)
 total time: 15948.1 ms
 ```
 
+
+## Model Quality
+
+We measure model quality by evaluating the perplexity over the WikiText-2 test dataset, following the strided sliding window strategy in https://huggingface.co/docs/transformers/perplexity. Lower perplexity usually indicates a better model.
+
+Download and unzip the dataset
+
+```sh
+wget https://huggingface.co/datasets/ggml-org/ci/resolve/main/wikitext-2-raw-v1.zip
+unzip wikitext-2-raw-v1.zip
+```
+
+```sh
+./build/bin/perplexity -m <model_path> -f wikitext-2-raw/wiki.test.raw -s 512 -l 2048
+```
+
 ## Development
 
 **Unit Test**

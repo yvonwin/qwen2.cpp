@@ -261,7 +261,7 @@ auto ModelLoader::read_tensor(const std::string &name, ggml_tensor *tensor) -> v
   // read and check tensor shape
   {
     int ndim = read_basic<int>();
-    int n_dims = ggml_n_dims((tensor));
+    int n_dims = ggml_n_dims(tensor);
       // a quick fix
       if ((n_dims == 1) && (ndim == 2) && (tensor->ne[1] == 1))
           n_dims = 2;
@@ -431,14 +431,14 @@ QwenAttention::QwenAttention(ModelContext *ctx, int hidden_size, int num_attenti
     v_cache(ggml_new_tensor_3d(ctx->ctx_kv.get(), GGML_TYPE_F16, max_length, hidden_size / num_attention_heads,
                                num_kv_heads)) {}
 
-auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor * {
+auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
 
   const int hidden_size = hidden_states->ne[0];
   const int qlen = hidden_states->ne[1];
   const int head_size = hidden_size / num_attention_heads;
   const int rope_dim = head_size;
-  const int n_past = static_cast<int *>(KQ_pos->data)[0];
+  // const int n_past = static_cast<int *>(KQ_pos->data)[0];
 
   ggml_tensor *q = q_proj.forward(ctx, hidden_states); // [qlen, hidden]
   // [qlen, heads, head_size]
@@ -580,12 +580,12 @@ auto Qwen2MoeSparseMoeBlock::forward(ModelContext *ctx, ggml_tensor *hidden_stat
   return final_hidden_states;
 }
 
-auto QwenBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor * {
+auto QwenBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
 
   ggml_tensor *residual = hidden_states;
   hidden_states = input_layernorm.forward(ctx, hidden_states, 1e-6f);
-  hidden_states = attn.forward(ctx, hidden_states, KQ_pos, n_ctx); // FAILE HERE  a->ne[2] == b->ne[0]
+  hidden_states = attn.forward(ctx, hidden_states, KQ_pos, n_past, n_ctx); // FAILE HERE  a->ne[2] == b->ne[0]
   hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
 
   residual = hidden_states;
@@ -595,12 +595,12 @@ auto QwenBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tens
   return hidden_states;
 }
 
-auto QwenMoeBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_ctx , int num_experts, int num_experts_per_tok) const -> ggml_tensor * {
+auto QwenMoeBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx , int num_experts, int num_experts_per_tok) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
 
   ggml_tensor *residual = hidden_states;
   hidden_states = input_layernorm.forward(ctx, hidden_states, 1e-6f);
-  hidden_states = attn.forward(ctx, hidden_states, KQ_pos, n_ctx); // FAILE HERE  a->ne[2] == b->ne[0]
+  hidden_states = attn.forward(ctx, hidden_states, KQ_pos, n_past, n_ctx); // FAILE HERE  a->ne[2] == b->ne[0]
 
   hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
 
@@ -620,12 +620,19 @@ QwenModel::QwenModel(ModelContext *ctx, const QwenConfig &config)
   }
 }
 
-auto QwenModel::forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor * {
+auto QwenModel::forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
+  ggml_tensor *KQ_pos = pos_ids_gen_(gctx, input_ids->ne[0], n_past, n_ctx);
+  if(KQ_pos){
+    tensor_to_device(KQ_pos);
+  }
   ggml_tensor *hidden_states = embed_tokens.forward(ctx, input_ids);
   for (const auto &layer : layers) {
     ggml_set_scratch(gctx, ctx->scratch);
-    hidden_states = layer.forward(ctx, hidden_states, KQ_pos, n_ctx);
+    hidden_states = layer.forward(ctx, hidden_states, KQ_pos,n_past, n_ctx);
+  }
+  if(KQ_pos){
+    tensor_to_cpu(KQ_pos);
   }
   ggml_scratch empty_scratch = {0, 0, nullptr};
   ggml_set_scratch(gctx, empty_scratch);
@@ -642,13 +649,21 @@ QwenMoeModel::QwenMoeModel(ModelContext *ctx, const QwenMoeConfig &config)
   }
 }
 
-auto QwenMoeModel::forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx,  int num_experts, int num_experts_per_tok) const -> ggml_tensor * {
+auto QwenMoeModel::forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx,  int num_experts, int num_experts_per_tok) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
+  ggml_tensor *KQ_pos = pos_ids_gen_(gctx, input_ids->ne[0], n_past, n_ctx);
+  if(KQ_pos){
+    tensor_to_device(KQ_pos);
+  }
   ggml_tensor *hidden_states = embed_tokens.forward(ctx, input_ids);
   for (const auto &layer : layers) {
     ggml_set_scratch(gctx, ctx->scratch);
-    hidden_states = layer.forward(ctx, hidden_states, KQ_pos, n_ctx, num_experts, num_experts_per_tok);
+    hidden_states = layer.forward(ctx, hidden_states, KQ_pos, n_past, n_ctx, num_experts, num_experts_per_tok);
   }
+  if(KQ_pos){
+    tensor_to_cpu(KQ_pos);
+  }
+
   ggml_scratch empty_scratch = {0, 0, nullptr};
   ggml_set_scratch(gctx, empty_scratch);
   hidden_states = norm.forward(ctx, hidden_states, 1e-6f);
@@ -819,18 +834,13 @@ QwenMoeForCausalLM::~QwenMoeForCausalLM() {
   }
 }
 
-auto QwenForCausalLM::generate_next_token(
-  const std::vector<int32_t> &input_ids,
-  const GenerationConfig &gen_config,
-  int n_past,
-  int n_ctx
-) -> int32_t {
+auto QwenForCausalLM::forward_graph_compute(const std::vector<int> &input_ids, int n_past, int n_ctx,int n_threads, bool is_decoding) -> ggml_tensor*{
   ctx_.ctx_b = make_unique_ggml_context(ctx_.compute_buffer.size(), ctx_.compute_buffer.data(), false);
   // ctx_.gf = ggml_new_graph(ctx_.ctx_b.get()); // dafault graph size didn't fit larger model like 32b, moe
   size_t GRAPH_SIZE = 4096 * 2;
   ctx_.gf = ggml_new_graph_custom(ctx_.ctx_b.get(), GRAPH_SIZE, false);
 
-  int n_threads = gen_config.num_threads; // user defined
+  // int n_threads = gen_config.num_threads; // user defined
   if (n_threads <= 0) {
     n_threads = get_default_num_threads(); // default thread num
   }
@@ -842,20 +852,10 @@ auto QwenForCausalLM::generate_next_token(
   ggml_tensor *curr_input_ids = ggml_new_tensor_1d(ctx_.ctx_b.get(), GGML_TYPE_I32, curr_input_ids_size);
   memcpy(curr_input_ids->data, input_ids.data() + n_past, ggml_nbytes(curr_input_ids));
 
-  ggml_tensor *KQ_pos = ggml_new_tensor_1d(ctx_.ctx_b.get(), GGML_TYPE_I32, curr_input_ids_size);
-  int * data = static_cast<int *>(KQ_pos->data);
-  for (int i = 0; i < curr_input_ids_size; ++i) {
-    data[i] = n_past + i;
-  }
-  if (KQ_pos) {
-    tensor_to_device(KQ_pos);
-  }
+  ggml_tensor *lm_logits = forward(&ctx_, curr_input_ids, n_past, n_ctx, is_decoding);
+  lm_logits->backend = GGML_BACKEND_CPU;
+  // lm_logits->backend = GGML_BACKEND_TYPE_CPU; //newer ggml
 
-  ggml_tensor *lm_logits = forward(&ctx_, curr_input_ids, KQ_pos, n_ctx);
-  lm_logits->backend = GGML_BACKEND_CPU; // newer ggml version
-  if (KQ_pos) {
-    tensor_to_cpu(KQ_pos);
-  }
 
   ggml_build_forward_expand(ctx_.gf, lm_logits);
 #ifdef GGML_USE_METAL
@@ -863,7 +863,17 @@ auto QwenForCausalLM::generate_next_token(
 #else
   ggml_graph_compute_helper(ctx_.work_buffer, ctx_.gf, n_threads);
 #endif
+  // std::cout << lm_logits -> ne[1] << std::endl;
+  return lm_logits;
+}
 
+auto QwenForCausalLM::generate_next_token(
+  const std::vector<int32_t> &input_ids,
+  const GenerationConfig &gen_config,
+  int n_past,
+  int n_ctx
+) -> int32_t {
+  ggml_tensor *lm_logits = forward_graph_compute(input_ids, n_past, n_ctx, gen_config.num_threads, true);
   int vocab_size = lm_logits->ne[0];
   float *next_token_logits = (float *)lm_logits->data;
 
@@ -1068,12 +1078,13 @@ auto QwenMoeForCausalLM::load(ModelLoader &loader) -> void {
 auto QwenForCausalLM::forward(
   ModelContext *ctx,
   ggml_tensor *input_ids,
-  ggml_tensor *KQ_pos,
-  int n_ctx
+  int n_past,
+  int n_ctx,
+  bool is_decoding
 ) const -> ggml_tensor * {
-  ggml_tensor *transformer_outputs = transformer.forward(ctx, input_ids, KQ_pos, n_ctx);
+  ggml_tensor *transformer_outputs = transformer.forward(ctx, input_ids, n_past, n_ctx);
   // NOTE: only compute next_token_logits for the last token
-  if (input_ids->ne[0] > 1) {
+  if (is_decoding && input_ids->ne[0] > 1) {
     transformer_outputs = tensor_assign_buffers(
       ggml_view_1d(ctx->ctx_b.get(), transformer_outputs, config.hidden_size,
                    (input_ids->ne[0] - 1) * config.hidden_size * ggml_element_size(transformer_outputs)));
@@ -1085,12 +1096,13 @@ auto QwenForCausalLM::forward(
 auto QwenMoeForCausalLM::forward(
   ModelContext *ctx,
   ggml_tensor *input_ids,
-  ggml_tensor *KQ_pos,
-  int n_ctx
+  int n_past,
+  int n_ctx,
+  bool is_decoding
 ) const -> ggml_tensor * {
-  ggml_tensor *transformer_outputs = transformer.forward(ctx, input_ids, KQ_pos, n_ctx, config.num_experts, config.num_experts_per_tok);
+  ggml_tensor *transformer_outputs = transformer.forward(ctx, input_ids, n_past, n_ctx, config.num_experts, config.num_experts_per_tok);
   // NOTE: only compute next_token_logits for the last token
-  if (input_ids->ne[0] > 1) {
+  if (is_decoding && input_ids->ne[0] > 1) {
     transformer_outputs = tensor_assign_buffers(
       ggml_view_1d(ctx->ctx_b.get(), transformer_outputs, config.hidden_size,
                    (input_ids->ne[0] - 1) * config.hidden_size * ggml_element_size(transformer_outputs)));

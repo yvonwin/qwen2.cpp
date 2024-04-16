@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include "tiktoken.h"
 
 #include <ggml.h>
@@ -356,7 +357,7 @@ class QwenAttention {
     QwenAttention() : num_attention_heads(0), num_kv_heads(0) {}
     QwenAttention(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int max_length);
 
-    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const -> ggml_tensor *;
 
     int num_attention_heads;
     int num_kv_heads;
@@ -425,12 +426,22 @@ class QwenBlock {
         post_attention_layernorm(ctx, hidden_size, false),
         mlp(ctx, hidden_size, intermediate_size) {}
 
-    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos,int n_past, int n_ctx) const -> ggml_tensor *;
 
     RMSNorm input_layernorm;
     QwenAttention attn;
     RMSNorm post_attention_layernorm;
     QwenMLP mlp;
+};
+
+struct BasicPositionIdsGenerator {
+    ggml_tensor *operator()(ggml_context *ctx, int qlen, int n_past, int n_ctx) const {
+        ggml_tensor *position_ids = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, qlen);
+        for (int i = 0; i < qlen; i++) {
+            ((int *)position_ids->data)[i] = n_past + i;
+        }
+        return position_ids;
+    }
 };
 
 class QwenMoeBlock {
@@ -442,7 +453,7 @@ class QwenMoeBlock {
         post_attention_layernorm(ctx, hidden_size, false),
         mlp(ctx, hidden_size, intermediate_size, moe_intermediate_size, shared_expert_intermediate_size, num_experts,num_experts_per_tok) {}
 
-    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_ctx, int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx, int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
 
     RMSNorm input_layernorm;
     QwenAttention attn;
@@ -455,11 +466,12 @@ class QwenModel {
     QwenModel() = default;
     QwenModel(ModelContext *ctx, const QwenConfig &config);
 
-    auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx) const -> ggml_tensor *;
 
     Embedding embed_tokens;
     std::vector<QwenBlock> layers;
     RMSNorm norm;
+    BasicPositionIdsGenerator pos_ids_gen_;
 };
 
 class QwenMoeModel {
@@ -468,11 +480,12 @@ class QwenMoeModel {
     QwenMoeModel(ModelContext *ctx, const QwenMoeConfig &config);
 
     // Attention: These parameters should not be set to fixed values. I did this for quick implementation.
-    auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx, int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
 
     Embedding embed_tokens;
     std::vector<QwenMoeBlock> layers;
     RMSNorm norm;
+    BasicPositionIdsGenerator pos_ids_gen_;
 };
 
 class QwenForCausalLM {
@@ -505,7 +518,9 @@ class QwenForCausalLM {
 
     virtual void load(ModelLoader &loader);
 
-    virtual ggml_tensor * forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const;
+    virtual ggml_tensor * forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, bool is_decoding) const;
+
+    auto forward_graph_compute(const std::vector<int> &input_ids, int n_past, int n_ctx,int n_threads, bool is_decoding)-> ggml_tensor*;
 
     static constexpr size_t MEM_SIZE     = 1280 * MB;  // 2k context
     static constexpr size_t SCRATCH_SIZE = 1280 * MB; // 2k context
@@ -526,7 +541,7 @@ class QwenMoeForCausalLM : public QwenForCausalLM {
     // Override methods here if needed
 
     auto load(ModelLoader &loader) -> void override;
-    auto forward(ModelContext *ctx, ggml_tensor *input_ids, ggml_tensor *KQ_pos, int n_ctx) const -> ggml_tensor * override;
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, bool is_decoding) const -> ggml_tensor * override;
 
     static constexpr size_t MEM_SIZE = 812ull * MB;
     static constexpr size_t SCRATCH_SIZE = 1844ull * MB;

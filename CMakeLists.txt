@@ -12,7 +12,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall")
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif ()
-# set(CMAKE_BUILD_TYPE "Debug")
 
 # third-party libraries
 set(ABSL_ENABLE_INSTALL ON)
@@ -36,6 +35,8 @@ if (GGML_METAL)
   configure_file(third_party/ggml/src/ggml-metal.metal ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/ggml-metal.metal COPYONLY)
 endif ()
 
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+
 file(GLOB CPP_SOURCES
   ${PROJECT_SOURCE_DIR}/*.h
   ${PROJECT_SOURCE_DIR}/*.cpp)
@@ -49,8 +50,22 @@ endif()
 add_library(qwen STATIC qwen.cpp)
 target_link_libraries(qwen PUBLIC re2::re2 ggml)
 
-add_executable(main main.cpp)
-target_link_libraries(main PRIVATE qwen)
+# add_executable(main main.cpp)
+# target_link_libraries(main PRIVATE qwen)
+
+# c++ examples
+option(QWEN_ENABLE_EXAMPLES "qwen: enable c++ examples" ON)
+if (QWEN_ENABLE_EXAMPLES)
+    add_executable(main main.cpp)
+    target_link_libraries(main PRIVATE qwen)
+
+    find_package(OpenMP)
+    if (OpenMP_CXX_FOUND)
+        set(QWEN_OPENMP_TARGET OpenMP::OpenMP_CXX)
+    endif ()
+    add_executable(perplexity tests/perplexity.cpp)
+    target_link_libraries(perplexity PRIVATE qwen ${QWEN_OPENMP_TARGET})
+endif ()
 
 # GoogleTest
 option(QWEN_ENABLE_TESTING "qwen: enable testing" OFF)
