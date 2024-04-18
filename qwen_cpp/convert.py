@@ -367,10 +367,10 @@ class CodeQwenConverter:
             config.num_hidden_layers,
             config.intermediate_size,
             config.seq_length,
-            config.bos_token_id if config.bos_token_id is not None else -1,
-            config.eos_token_id if config.eos_token_id is not None else -1,
-            config.pad_token_id if config.pad_token_id is not None else -1,
-            config.sep_token_id if config.sep_token_id is not None else -1,
+            generation_config.eos_token_id[0], # eos_token_id[2, 4]
+            generation_config.pad_token_id, # 92298
+            list(tokenizer.added_tokens_decoder.keys())[3],  #3  <|im_start|>
+            list(tokenizer.added_tokens_decoder.keys())[4],  #4  <|im_end|>
         ]
         f.write(struct.pack("i" * len(config_values), *config_values))
 
@@ -431,7 +431,7 @@ def convert(f: BinaryIO, model_name_or_path: str, dtype: str = "q4_0"):
         Qwen2MOEConverter.convert(f, model, tokenizer, ggml_type)
     else:
         print('Warning: Qwen1 is not supported now')
-        # QwenConverter.convert(f, model, tokenizer, ggml_type)
+        QwenConverter.convert(f, model, tokenizer, ggml_type)
 
 
 def main():
