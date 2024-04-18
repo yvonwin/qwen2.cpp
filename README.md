@@ -5,11 +5,12 @@ This project is an independent C++ implementation of [Qwen1.5](https://github.co
 ![](docs/main_demo.jpg)
 
 ## Updates
-- **`2023/03/26`**  Update to Qwen1.5. Basic functionality has been successfully ported. 
-- **`2023/03/28`**  Introduced a system prompt feature for user input; Add cli and web demo, support oai server.
-- **`2023/04/07`** Support [Qwen1.5-32B](https://huggingface.co/Qwen/Qwen1.5-32B-Chat).
-- **`2023/04/09`** Support [Qwen1.5-MoE2.7B](https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat).
-- **`2023/04/11`** The platform has been updated to support Windows. It has been tested on Visual Studio 2022, and both CUDA and CPU functionalities are confirmed to work correctly.
+- **`2024/03/26`**  Update to Qwen1.5. Basic functionality has been successfully ported. 
+- **`2024/03/28`**  Introduced a system prompt feature for user input; Add cli and web demo, support oai server.
+- **`2024/04/07`** Support [Qwen1.5-32B](https://huggingface.co/Qwen/Qwen1.5-32B-Chat).
+- **`2024/04/09`** Support [Qwen1.5-MoE2.7B](https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat).
+- **`2024/04/11`** The platform has been updated to support Windows. It has been tested on Visual Studio 2022, and both CUDA and CPU functionalities are confirmed to work correctly.
+- **`2024/04/18`** Tested on [CodeQwen1.5-7B](https://huggingface.co/Qwen/CodeQwen1.5-7B) The model's architecture is verified to be correct. However, it uses SentencePiece for tokenization.You can test it with hf tokenizer like `examples/codeqwen.py`.
 
 ## Features
 
@@ -299,10 +300,11 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 
 - [x] Qwen1.5 32b
 - [x] Qwen1.5 A2.7b moe: It's necessary to modify the value of `GGML_MAX_SRC` from 10 to 62 for proper operation.
+- [x] Codeqwen  At this time, I prefer not to add any additional libraries.
 - [ ] Sync ggml: The interface of the Metal API and cuBLAS has changed significantly in later versions, so we will keep this version for now.
 - [ ] Reduce unnecessary third-party dependencies.
 - [ ] RAG explore.
 
-## Acknowledgements
+## Acknowledgementss
 
 * This project is greatly inspired by [chatllm.cpp](https://github.com/foldl/chatllm.cpp) [qwen.cpp](https://github.com/QwenLM/qwen.cpp) [llama.cpp](https://github.com/ggerganov/llama.cpp), [chatglm.cpp](https://github.com/li-plus/chatglm.cpp), [ggml](https://github.com/ggerganov/ggml), [tiktoken](https://github.com/openai/tiktoken), [tokenizer](https://github.com/sewenew/tokenizer), [cpp-base64](https://github.com/ReneNyffenegger/cpp-base64), [re2](https://github.com/google/re2) and [unordered_dense](https://github.com/martinus/unordered_dense).
