@@ -64,14 +64,18 @@ const std::string ChatMessage::ROLE_USER = "user";
 const std::string ChatMessage::ROLE_ASSISTANT = "assistant";
 const std::string ChatMessage::ROLE_SYSTEM = "system";
 
-void QwenTokenizer::check_chat_messages(const std::vector<ChatMessage> &messages) {
-   // default we have system param
-    QWEN_CHECK(messages.size() % 2 == 0) << "invalid chat messages size " << messages.size();
-    for (size_t i = 1; i < messages.size(); i++) {
-        const std::string &target_role = (i % 2 == 1) ? ChatMessage::ROLE_USER : ChatMessage::ROLE_ASSISTANT;
-        QWEN_CHECK(messages[i].role == target_role)
-            << "expect messages[" << i << "].role to be " << target_role << ", but got " << messages[i].role;
-    }
+// Adapted from https://github.com/ggerganov/llama.cpp/blob/master/examples/common.cpp
+auto get_num_physical_cores() -> int {
+  unsigned int n_threads = std::thread::hardware_concurrency();
+  return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
+}
+
+auto get_default_num_threads() -> int {
+#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_METAL)
+    return 1;
+#else
+  return std::min(get_num_physical_cores(), 16);
+#endif
 }
 
 // Adapted from https://github.com/ggerganov/llama.cpp/blob/master/llama.cpp
@@ -319,6 +323,7 @@ auto RMSNorm::forward(ModelContext *ctx, ggml_tensor *input, float eps) const ->
 
 // ===== Qwen =====
 
+// parse tiktoken file
 static std::pair<std::string, int> _parse(const std::string &line) {
   auto pos = line.find(" ");
   if (pos == std::string::npos) {
@@ -336,6 +341,7 @@ static std::pair<std::string, int> _parse(const std::string &line) {
   return {std::move(token), rank};
 }
 
+// Init tokenizer 
 QwenTokenizer::QwenTokenizer(const std::string & tiktoken_path, const QwenConfig &config) {
   std::ifstream file(tiktoken_path);
   if (!file) {
@@ -388,6 +394,16 @@ auto QwenTokenizer::decode(const std::vector<int> &ids) const -> std::string {
   return text;
 }
 
+void QwenTokenizer::check_chat_messages(const std::vector<ChatMessage> &messages) {
+   // default we have system prompt
+    QWEN_CHECK(messages.size() % 2 == 0) << "invalid chat messages size " << messages.size();
+    for (size_t i = 1; i < messages.size(); i++) {
+        const std::string &target_role = (i % 2 == 1) ? ChatMessage::ROLE_USER : ChatMessage::ROLE_ASSISTANT;
+        QWEN_CHECK(messages[i].role == target_role)
+            << "expect messages[" << i << "].role to be " << target_role << ", but got " << messages[i].role;
+    }
+}
+
 std::string QwenTokenizer::build_prompt(const std::vector<ChatMessage> &messages) {
 
   // check_chat_messages(messages); 
@@ -405,7 +421,7 @@ std::string QwenTokenizer::build_prompt(const std::vector<ChatMessage> &messages
 
   // oss_prompt << "\n<|im_start|>user\n" << messages.back().content <<  "<|im_end|>\n<|im_start|>assistant\n"; // old way: last message
 
-  // std::cout << oss_prompt.str()<<std::endl;
+  // std::cout << oss_prompt.str()<<std::endl; //debug
 
   return oss_prompt.str();
 }
@@ -419,6 +435,7 @@ std::vector<int> QwenTokenizer::encode_messages(const std::vector<ChatMessage> &
 auto QwenTokenizer::is_special_id(int id) const -> bool {
   return id == eos_token_id || id == im_start_id || id == im_end_id;
 }
+
 
 QwenAttention::QwenAttention(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int max_length)
   : num_attention_heads(num_attention_heads), num_kv_heads(num_kv_heads),
@@ -668,20 +685,6 @@ auto QwenMoeModel::forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past
   ggml_set_scratch(gctx, empty_scratch);
   hidden_states = norm.forward(ctx, hidden_states, 1e-6f);
   return hidden_states;
-}
-
-// Adapted from https://github.com/ggerganov/llama.cpp/blob/master/examples/common.cpp
-auto get_num_physical_cores() -> int {
-  unsigned int n_threads = std::thread::hardware_concurrency();
-  return n_threads > 0 ? (n_threads <= 4 ? n_threads : n_threads / 2) : 4;
-}
-
-auto get_default_num_threads() -> int {
-#if defined(GGML_USE_CUBLAS) || defined(GGML_USE_METAL)
-    return 1;
-#else
-  return std::min(get_num_physical_cores(), 16);
-#endif
 }
 
 QwenForCausalLM::QwenForCausalLM(const QwenConfig &config)
