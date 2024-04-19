@@ -8,7 +8,7 @@ This project is an independent C++ implementation of [Qwen1.5](https://github.co
 - **`2024/03/26`**  Update to Qwen1.5. Basic functionality has been successfully ported. 
 - **`2024/03/28`**  Introduced a system prompt feature for user input; Add cli and web demo, support oai server.
 - **`2024/04/07`** Support [Qwen1.5-32B](https://huggingface.co/Qwen/Qwen1.5-32B-Chat).
-- **`2024/04/09`** Support [Qwen1.5-MoE2.7B](https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat).
+- **`2024/04/09`** Support [Qwen1.5-MoEA2.7B](https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat).
 - **`2024/04/11`** The platform has been updated to support Windows. It has been tested on Visual Studio 2022, and both CUDA and CPU functionalities are confirmed to work correctly.
 - **`2024/04/18`** Tested on [CodeQwen1.5-7B](https://huggingface.co/Qwen/CodeQwen1.5-7B) The model's architecture is verified to be correct. However, it uses SentencePiece for tokenization.You can test it with hf tokenizer like `examples/codeqwen.py`.
 
@@ -21,7 +21,7 @@ Highlights:
 * [x] Python binding.
 
 Support Matrix:
-* Hardwares: x86/arm CPU, NVIDIA GPU
+* Hardwares: x86/arm CPU, NVIDIA GPU, Apple Silicon GPU
 * Platforms: Linux, MacOS, Winodws
 * Models: [Qwen1.5](https://github.com/QwenLM/Qwen1.5) family
 
@@ -44,11 +44,9 @@ If you forgot the `--recursive` flag when cloning the repository, run the follow
 git submodule update --init --recursive
 ```
 
-Download the qwen.tiktoken file from [Hugging Face](https://huggingface.co/Qwen/Qwen-7B-Chat/blob/main/qwen.tiktoken) or [modelscope](https://modelscope.cn/models/qwen/Qwen-7B-Chat/files).
-
 **Quantize Model**
 
-Use `convert.py` to transform Qwen-LM into quantized GGML format. For example, to convert the fp16 original model to q4_0 (quantized int4) GGML model, run:
+Use `convert.py` to transform Qwen1.5 into quantized GGML format. For example, to convert the fp16 original model to q4_0 (quantized int4) GGML model, run:
 ```sh
 python3 qwen_cpp/convert.py -i Qwen/Qwen1.5-1.8B-Chat -t q4_0 -o qwen2_1.8b-ggml.bin
 ```
@@ -60,7 +58,7 @@ The original model (`-i <model_name_or_path>`) can be a HuggingFace model name o
 * Qwen1.5-14B: `Qwen/Qwen1.5-14B-Chat`
 * Qwen1.5-32B: `Qwen/Qwen1.5-32B-Chat`
 * Qwen1.5-72B: `Qwen/Qwen1.5-32B-Chat`
-* Qwen1.5-Moe2.7B: `Qwen/Qwen1.5-MoE-A2.7B-Chat`
+* Qwen1.5-MoeA2.7B: `Qwen/Qwen1.5-MoE-A2.7B-Chat`
 
 You are free to try any of the below quantization types by specifying `-t <type>`:
 * `q4_0`: 4-bit integer quantization with fp16 scales.
@@ -75,11 +73,10 @@ You are free to try any of the below quantization types by specifying `-t <type>
 
 Compile the project using CMake:
 ```sh
-cmake -B build
-cmake --build build -j --config Release
+cmake -B build && cmake --build build -j --config Release
 ```
 
-Now you may chat with the quantized Qwen-7B-Chat model by running:
+Now you may chat with the quantized Qwen-Chat model by running:
 ```sh
 ./build/bin/main -m qwen2_32b-ggml.bin  -p 你想活出怎样的人生 -s "你是一个猫娘"
 # 作为一只猫娘，我想要活出充满活力、自由自在和温暖幸福的人生。
@@ -176,7 +173,7 @@ python examples/web_demo.py -m qwen2_1.8b-ggml.bin
 
 ![web_demo](docs/web_demo.jpg)
 
-webdemo with system promopt:
+web demo with system promopt setting:
 ```sh
 python examples/web_demo2.py -m qwen2_1.8b-ggml.bin
 ```
@@ -242,22 +239,11 @@ enc = tiktoken.get_encoding("cl100k_base")
 assert enc.decode(enc.encode("hello world")) == "hello world"
 ```
 
-**Benchmark**
-
 The speed of tiktoken.cpp is on par with openai tiktoken:
 ```python
 cd tests
 RAYON_NUM_THREADS=1 python benchmark.py
 ```
-
-Test on m1 air. Qwen1.5_7b q4_0:
-
-```sh
-prompt time: 798.344 ms / 21 tokens (38.016 ms/token)
-output time: 15149.7 ms / 159 tokens (95.281 ms/token)
-total time: 15948.1 ms
-```
-
 
 ## Model Quality
 
@@ -302,7 +288,8 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 - [x] Qwen1.5 A2.7b moe: It's necessary to modify the value of `GGML_MAX_SRC` from 10 to 62 for proper operation.
 - [x] Codeqwen  At this time, I prefer not to add any additional libraries.
 - [ ] Sync ggml: The interface of the Metal API and cuBLAS has changed significantly in later versions, so we will keep this version for now.
-- [ ] Reduce unnecessary third-party dependencies.
+- [ ] Reduce unnecessary third-party dependencies
+    The current implementation of tiktoken requires the Re2 library, which in turn depends on the abseil-cpp library 🪆.But Most of the time is spent in regex, try to find a ez solution.
 - [ ] RAG explore.
 
 ## Acknowledgementss
