@@ -1,8 +1,6 @@
 #pragma once
 
 #include <re2/re2.h>
-#include "unordered_dense.h"
-
 #include <cassert>
 #include <limits>
 #include <optional>
@@ -14,15 +12,19 @@
 
 namespace tiktoken {
 
+static uint64_t _max_size() {
+  return std::numeric_limits<uint64_t>::max();
+}
+
 static auto _byte_pair_merge(
 	const std::string &piece,
-	const ankerl::unordered_dense::map<std::string, int> &ranks,
+	const std::unordered_map<std::string, int> &ranks,
 	std::function<int (int, int)> func
 ) -> std::vector<int> {
 	std::vector<std::pair<int, int>> parts;
 	parts.reserve(piece.size() + 1);
 	for (auto idx = 0U; idx < piece.size() + 1; ++idx) {
-		parts.emplace_back(idx, std::numeric_limits<int>::max());
+		parts.emplace_back(idx, _max_size());
 	}
 
 	auto get_rank = [&piece, &ranks](
@@ -45,7 +47,7 @@ static auto _byte_pair_merge(
 	for (auto i = 0U; i < parts.size() - 2; ++i) {
 		auto rank = get_rank(parts, i, 0);
 		if (rank) {
-			assert(*rank != std::numeric_limits<int>::max());
+			assert(*rank != _max_size());
 			parts[i].second = *rank;
 		}
 	}
@@ -53,7 +55,7 @@ static auto _byte_pair_merge(
 	while (true) {
 		if (parts.size() == 1) break;
 
-		auto min_rank = std::make_pair<int, int>(std::numeric_limits<int>::max(), 0);
+		auto min_rank = std::make_pair<int, int>(_max_size(), 0);
 		for (auto i = 0U; i < parts.size() - 1; ++i) {
 			auto rank = parts[i].second;
 			if (rank < min_rank.first) {
@@ -61,20 +63,20 @@ static auto _byte_pair_merge(
 			}
 		}
 
-		if (min_rank.first != std::numeric_limits<int>::max()) {
+		if (min_rank.first != _max_size()) {
 			auto i = min_rank.second;
 			auto rank = get_rank(parts, i, 1);
 			if (rank) {
 				parts[i].second = *rank;
 			} else {
-				parts[i].second = std::numeric_limits<int>::max();
+				parts[i].second = _max_size();
 			}
 			if (i > 0) {
 				auto rank = get_rank(parts, i - 1, 1);
 				if (rank) {
 					parts[i - 1].second = *rank;
 				} else {
-					parts[i - 1].second = std::numeric_limits<int>::max();
+					parts[i - 1].second = _max_size();
 				}
 			}
 
@@ -93,7 +95,7 @@ static auto _byte_pair_merge(
 
 static auto byte_pair_encode(
 	const std::string &piece,
-	const ankerl::unordered_dense::map<std::string, int> &ranks
+	const std::unordered_map<std::string, int> &ranks
 ) -> std::vector<int> {
 	if (piece.size() == 1) {
 		return {ranks.at(piece)};
@@ -111,8 +113,8 @@ class tiktoken {
 	public:
     tiktoken() = default;
 		tiktoken(
-			ankerl::unordered_dense::map<std::string, int> encoder,
-			ankerl::unordered_dense::map<std::string, int> special_encoder,
+			std::unordered_map<std::string, int> encoder,
+			std::unordered_map<std::string, int> special_encoder,
 			const std::string &pattern
 		) {
 			regex_ = std::make_unique<re2::RE2>("(" + pattern + ")");
@@ -166,7 +168,7 @@ class tiktoken {
 	private:
 		auto split_with_allowed_special_token(
 			re2::StringPiece &input,
-			const ankerl::unordered_dense::map<std::string, int> &allowed_special
+			const std::unordered_map<std::string, int> &allowed_special
 		) const -> std::pair<std::optional<std::string>, re2::StringPiece> {
 			if (special_regex_ == nullptr) return { std::nullopt, input };
 
@@ -203,7 +205,7 @@ class tiktoken {
 
 		auto _encode_native(
 			const std::string &text,
-			const ankerl::unordered_dense::map<std::string, int> &allowed_special
+			const std::unordered_map<std::string, int> &allowed_special
 		) const -> std::pair<std::vector<int>, int> {
 			std::vector<int> ret;
 			int last_piece_token_len = 0;
@@ -257,10 +259,10 @@ class tiktoken {
 			return ret;
 		}
 
-		ankerl::unordered_dense::map<std::string, int> encoder_;
-		ankerl::unordered_dense::map<std::string, int> special_tokens_encoder;
-		ankerl::unordered_dense::map<int, std::string> decoder_;
-		ankerl::unordered_dense::map<int, std::string> special_tokens_decoder;
+		std::unordered_map<std::string, int> encoder_;
+		std::unordered_map<std::string, int> special_tokens_encoder;
+		std::unordered_map<int, std::string> decoder_;
+		std::unordered_map<int, std::string> special_tokens_decoder;
 		std::unique_ptr<re2::RE2> regex_;
 		std::unique_ptr<re2::RE2> special_regex_;
 };

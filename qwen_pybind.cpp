@@ -33,7 +33,7 @@ PYBIND11_MODULE(_C, m) {
     .def_readonly("im_end_id", &QwenConfig::im_end_id);
 
   py::class_<tiktoken::tiktoken>(m, "tiktoken_cpp")
-    .def(py::init<ankerl::unordered_dense::map<std::string, int>, ankerl::unordered_dense::map<std::string, int>, const std::string &>())
+    .def(py::init<std::unordered_map<std::string, int>, std::unordered_map<std::string, int>, const std::string &>())
     .def("encode_ordinary", &tiktoken::tiktoken::encode_ordinary)
     .def("encode", &tiktoken::tiktoken::encode)
     .def("encode_single_piece", &tiktoken::tiktoken::encode_single_piece)

@@ -348,7 +348,7 @@ QwenTokenizer::QwenTokenizer(const std::string & tiktoken_path, const QwenConfig
     throw std::runtime_error("failed to open encoder file: " + tiktoken_path);
   }
 
-  ankerl::unordered_dense::map<std::string, int> encoder;
+  std::unordered_map<std::string, int> encoder;
   std::string line;
   while (std::getline(file, line)) {
     auto [token, rank] = _parse(line);
@@ -365,7 +365,7 @@ QwenTokenizer::QwenTokenizer(const std::string & tiktoken_path, const QwenConfig
     special_tokens_s.push_back(buffer);
   }
   size_t encoder_size = encoder.size();
-  ankerl::unordered_dense::map<std::string, int> special_tokens;
+  std::unordered_map<std::string, int> special_tokens;
   special_tokens.reserve(special_tokens_s.size());
   for (size_t i = 0; i < special_tokens_s.size(); i++) {
     special_tokens[special_tokens_s[i]] = encoder_size + i;
