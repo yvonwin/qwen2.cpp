@@ -1,6 +1,5 @@
 #include "qwen.h"
 #include "base64.h"
-#include "unordered_dense.h"
 #include <fcntl.h>
 #include <fstream>
 #include <numeric>
