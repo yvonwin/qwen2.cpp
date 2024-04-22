@@ -288,8 +288,6 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 - [x] Qwen1.5 A2.7b moe: It's necessary to modify the value of `GGML_MAX_SRC` from 10 to 62 for proper operation.
 - [x] Codeqwen  At this time, I prefer not to add any additional libraries.
 - [ ] Sync ggml: The interface of the Metal API and cuBLAS has changed significantly in later versions, so we will keep this version for now.
-- [ ] Reduce unnecessary third-party dependencies
-    The current implementation of tiktoken requires the Re2 library, which in turn depends on the abseil-cpp library 🪆.But Most of the time is spent in regex, try to find a ez solution.
 - [ ] RAG explore.
 
 ## Acknowledgementss
