@@ -32,32 +32,6 @@
 
 namespace qwen {
 
-ggml_tensor *tensor_assign_buffers(ggml_tensor *tensor) {
-#ifdef GGML_USE_CUBLAS
-  ggml_cuda_assign_buffers(tensor);
-#endif
-  return tensor;
-}
-
-auto tensor_to_device(ggml_tensor *tensor) -> ggml_tensor * {
-#ifdef GGML_USE_CUBLAS
-  if (tensor->backend == GGML_BACKEND_CPU) {
-    tensor->backend = GGML_BACKEND_GPU;
-    ggml_cuda_transform_tensor(tensor->data, tensor);
-  }
-#endif
-  return tensor;
-}
-
-auto tensor_to_cpu(ggml_tensor *tensor) -> ggml_tensor * {
-#ifdef GGML_USE_CUBLAS
-  if (tensor->backend != GGML_BACKEND_CPU) {
-    ggml_cuda_free_data(tensor);
-    tensor->backend = GGML_BACKEND_CPU;
-  }
-#endif
-  return tensor;
-}
 
 const std::string ChatMessage::ROLE_USER = "user";
 const std::string ChatMessage::ROLE_ASSISTANT = "assistant";
@@ -90,19 +64,19 @@ auto ggml_graph_compute_helper(std::vector<uninitialized_char> &buf, ggml_cgraph
 }
 
 auto ModelContext::init_device_context() -> void {
-#ifdef GGML_USE_METAL
-  ctx_metal = make_unique_ggml_metal_context(1);
-  const size_t max_size = ggml_get_max_tensor_size(ctx_w.get());
-  void *weight_data = weight_buffer.empty() ? ggml_get_mem_buffer(ctx_w.get()) : (void *)weight_buffer.data();
-  size_t weight_size = weight_buffer.empty() ? ggml_get_mem_size(ctx_w.get()) : weight_buffer.size();
-  QWEN_CHECK(ggml_metal_add_buffer(ctx_metal.get(), "weights", weight_data, weight_size, max_size));
-  QWEN_CHECK(ggml_metal_add_buffer(ctx_metal.get(), "kv", ggml_get_mem_buffer(ctx_kv.get()),
-             ggml_get_mem_size(ctx_kv.get()), 0));
-  void *compute_data = ctx_b ? ggml_get_mem_buffer(ctx_b.get()) : compute_buffer.data();
-  size_t compute_size = ctx_b ? ggml_get_mem_size(ctx_b.get()) : compute_buffer.size();
-  QWEN_CHECK(ggml_metal_add_buffer(ctx_metal.get(), "compute", compute_data, compute_size, 0));
-  QWEN_CHECK(ggml_metal_add_buffer(ctx_metal.get(), "scratch", scratch.data, scratch.size, 0));
-#endif
+// #ifdef GGML_USE_METAL
+//   ctx_metal = make_unique_ggml_metal_context(1);
+//   const size_t max_size = ggml_get_max_tensor_size(ctx_w.get());
+//   void *weight_data = weight_buffer.empty() ? ggml_get_mem_buffer(ctx_w.get()) : (void *)weight_buffer.data();
+//   size_t weight_size = weight_buffer.empty() ? ggml_get_mem_size(ctx_w.get()) : weight_buffer.size();
+//   QWEN_CHECK(ggml_metal_add_buffer(ctx_metal.get(), "weights", weight_data, weight_size, max_size));
+//   QWEN_CHECK(ggml_metal_add_buffer(ctx_metal.get(), "kv", ggml_get_mem_buffer(ctx_kv.get()),
+//              ggml_get_mem_size(ctx_kv.get()), 0));
+//   void *compute_data = ctx_b ? ggml_get_mem_buffer(ctx_b.get()) : compute_buffer.data();
+//   size_t compute_size = ctx_b ? ggml_get_mem_size(ctx_b.get()) : compute_buffer.size();
+//   QWEN_CHECK(ggml_metal_add_buffer(ctx_metal.get(), "compute", compute_data, compute_size, 0));
+//   QWEN_CHECK(ggml_metal_add_buffer(ctx_metal.get(), "scratch", scratch.data, scratch.size, 0));
+// #endif
 }
 
 // ===== streamer =====
@@ -305,9 +279,9 @@ auto Embedding::forward(ModelContext *ctx, ggml_tensor *input) const -> ggml_ten
 auto Linear::forward(ModelContext *ctx, ggml_tensor *input) const -> ggml_tensor * {
   // input: [seqlen, in_features]
   ggml_context *gctx = ctx->ctx_b.get();
-  ggml_tensor *output = tensor_assign_buffers(ggml_mul_mat(gctx, weight, input)); // [seqlen, out_features]
+  ggml_tensor *output = ggml_mul_mat(gctx, weight, input); // [seqlen, out_features]
   if (bias) {
-    output = tensor_assign_buffers(ggml_add_inplace(gctx, output, bias));
+    output = ggml_add_inplace(gctx, output, bias);
   }
   return output;
 }
@@ -315,8 +289,8 @@ auto Linear::forward(ModelContext *ctx, ggml_tensor *input) const -> ggml_tensor
 auto RMSNorm::forward(ModelContext *ctx, ggml_tensor *input, float eps) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
   auto ggml_rms_norm_fn = inplace ? ggml_rms_norm_inplace : ggml_rms_norm;
-  ggml_tensor *output = tensor_assign_buffers(ggml_rms_norm_fn(gctx, input, eps));
-  output = tensor_assign_buffers(ggml_mul_inplace(gctx, output, weight));
+  ggml_tensor *output = ggml_rms_norm_fn(gctx, input, eps);
+  output = ggml_mul_inplace(gctx, output, weight);
   return output;
 }
 
@@ -467,59 +441,53 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
   ggml_tensor *v = v_proj.forward(ctx, hidden_states); // [qlen, kv_hidden]
   ggml_tensor *value_layer = ggml_view_3d(gctx, v, head_size, num_kv_heads, qlen, head_size * ggml_element_size(v), v->nb[1], 0);
 
-#ifdef GGML_USE_CUBLAS
-  if (!ggml_is_contiguous(query_layer)) {
-    query_layer = tensor_assign_buffers(ggml_cont(gctx, query_layer));
-  }
-#endif
-  query_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx));
-  query_layer = tensor_assign_buffers(ggml_permute(gctx, query_layer, 0, 2, 1, 3)); // [heads, qlen, head_size]
 
-#ifdef GGML_USE_CUBLAS
-  if (!ggml_is_contiguous(key_layer)) {
-    key_layer = tensor_assign_buffers(ggml_cont(gctx, key_layer));
-  }
-#endif
-  key_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, key_layer, KQ_pos, rope_dim, 2, n_ctx));
-  key_layer = tensor_assign_buffers(ggml_permute(gctx, key_layer, 0, 2, 1, 3)); // [kv_heads, qlen, head_size]
-  value_layer = tensor_assign_buffers(ggml_permute(gctx, value_layer, 1, 2, 0, 3)); // [kv_heads, head_size, qlen]
+
+  query_layer = ggml_rope_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx);
+  query_layer = ggml_permute(gctx, query_layer, 0, 2, 1, 3); // [heads, qlen, head_size]
+
+
+
+  key_layer = ggml_rope_inplace(gctx, key_layer, KQ_pos, rope_dim, 2, n_ctx);
+  key_layer = ggml_permute(gctx, key_layer, 0, 2, 1, 3); // [kv_heads, qlen, head_size]
+  value_layer = ggml_permute(gctx, value_layer, 1, 2, 0, 3); // [kv_heads, head_size, qlen]
 
   // store key & value to cache
-  ggml_tensor *k_cache_view = tensor_assign_buffers(
+  ggml_tensor *k_cache_view = 
     ggml_view_3d(gctx, k_cache, head_size, qlen, num_kv_heads, k_cache->nb[1], k_cache->nb[2],
-                 n_past * head_size * ggml_element_size(k_cache))); // [kv_heads, qlen, head_size]
+                 n_past * head_size * ggml_element_size(k_cache)); // [kv_heads, qlen, head_size]
   ggml_build_forward_expand(ctx->gf, ggml_cpy(gctx, key_layer, k_cache_view));
-  ggml_tensor *v_cache_view = tensor_assign_buffers(
+  ggml_tensor *v_cache_view = 
     ggml_view_3d(gctx, v_cache, qlen, head_size, num_kv_heads, v_cache->nb[1], v_cache->nb[2],
-                 n_past * ggml_element_size(v_cache))); // [kv_heads, head_size, qlen]
+                 n_past * ggml_element_size(v_cache)); // [kv_heads, head_size, qlen]
   ggml_build_forward_expand(ctx->gf, ggml_cpy(gctx, value_layer, v_cache_view));  
 
   // concat key & value with past kv
-  key_layer = tensor_assign_buffers(
+  key_layer = 
     ggml_view_3d(gctx, k_cache, head_size, n_past + qlen, num_kv_heads,
-                 k_cache->nb[1], k_cache->nb[2], 0)); // [kv_heads, klen, head_size]
-  value_layer = tensor_assign_buffers(
+                 k_cache->nb[1], k_cache->nb[2], 0); // [kv_heads, klen, head_size]
+  value_layer = 
     ggml_view_3d(gctx, v_cache, n_past + qlen, head_size, num_kv_heads,
-                 v_cache->nb[1], v_cache->nb[2], 0)); // [kv_heads, head_size, klen]
+                 v_cache->nb[1], v_cache->nb[2], 0); // [kv_heads, head_size, klen]
 
   // attention
   ggml_tensor *attn_scores = 
-    tensor_assign_buffers(ggml_mul_mat(gctx, key_layer, query_layer)); // [kv_heads, mqa_scale * qlen, klen]
-  attn_scores = tensor_assign_buffers(
-    ggml_scale_inplace(gctx, attn_scores, 1.f / std::sqrt(head_size)));
+    ggml_mul_mat(gctx, key_layer, query_layer); // [kv_heads, mqa_scale * qlen, klen]
+  attn_scores = 
+    ggml_scale_inplace(gctx, attn_scores, 1.f / std::sqrt(head_size));
   if (n_past == 0) {
     // build attention mask for context input
-    attn_scores = tensor_assign_buffers(ggml_diag_mask_inf_inplace(gctx, attn_scores, n_past));
+    attn_scores = ggml_diag_mask_inf_inplace(gctx, attn_scores, n_past);
   }
   ggml_tensor *attn_probs =
-    tensor_assign_buffers(ggml_soft_max_inplace(gctx, attn_scores)); // [kv_heads, mqa_scale * qlen, klen]
+    ggml_soft_max_inplace(gctx, attn_scores); // [kv_heads, mqa_scale * qlen, klen]
 
-  ggml_tensor *context_layer = tensor_assign_buffers(
-    ggml_mul_mat(gctx, value_layer, attn_probs)); // [kv_heads, mqa_scale * qlen, head_size]
-  context_layer = tensor_assign_buffers(
-    ggml_cont(gctx, ggml_permute(gctx, context_layer, 0, 2, 1, 3))); // [qlen, heads, head_size]
-  context_layer = tensor_assign_buffers(
-    ggml_reshape_2d(gctx, context_layer, hidden_size, qlen)); // [qlen, hidden]
+  ggml_tensor *context_layer = 
+    ggml_mul_mat(gctx, value_layer, attn_probs); // [kv_heads, mqa_scale * qlen, head_size]
+  context_layer = 
+    ggml_cont(gctx, ggml_permute(gctx, context_layer, 0, 2, 1, 3)); // [qlen, heads, head_size]
+  context_layer = 
+    ggml_reshape_2d(gctx, context_layer, hidden_size, qlen); // [qlen, hidden]
 
   ggml_tensor *attn_output = o_proj.forward(ctx, context_layer);
   return attn_output;
@@ -529,10 +497,10 @@ auto QwenMLP::forward(ModelContext *ctx, ggml_tensor *hidden_states) const -> gg
   ggml_context *gctx = ctx->ctx_b.get();
 
   ggml_tensor *gate_out = gate_proj.forward(ctx, hidden_states);
-  gate_out = tensor_assign_buffers(ggml_silu_inplace(gctx, gate_out));
+  gate_out = ggml_silu_inplace(gctx, gate_out);
   ggml_tensor *up_out = up_proj.forward(ctx, hidden_states);
 
-  ggml_tensor *output = tensor_assign_buffers(ggml_mul_inplace(gctx, gate_out, up_out));
+  ggml_tensor *output = ggml_mul_inplace(gctx, gate_out, up_out);
   output = down_proj.forward(ctx, output);
   return output;
 }
@@ -602,12 +570,12 @@ auto QwenBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tens
   ggml_tensor *residual = hidden_states;
   hidden_states = input_layernorm.forward(ctx, hidden_states, 1e-6f);
   hidden_states = attn.forward(ctx, hidden_states, KQ_pos, n_past, n_ctx); // FAILE HERE  a->ne[2] == b->ne[0]
-  hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
+  hidden_states = ggml_add_inplace(gctx, hidden_states, residual);
 
   residual = hidden_states;
   hidden_states = post_attention_layernorm.forward(ctx, hidden_states, 1e-6f);
   hidden_states = mlp.forward(ctx, hidden_states);
-  hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
+  hidden_states = ggml_add_inplace(gctx, hidden_states, residual);
   return hidden_states;
 }
 
@@ -618,12 +586,12 @@ auto QwenMoeBlock::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_t
   hidden_states = input_layernorm.forward(ctx, hidden_states, 1e-6f);
   hidden_states = attn.forward(ctx, hidden_states, KQ_pos, n_past, n_ctx); // FAILE HERE  a->ne[2] == b->ne[0]
 
-  hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
+  hidden_states = ggml_add_inplace(gctx, hidden_states, residual);
 
   residual = hidden_states;
   hidden_states = post_attention_layernorm.forward(ctx, hidden_states, 1e-6f);
   hidden_states = mlp.forward(ctx, hidden_states, num_experts, num_experts_per_tok);
-  hidden_states = tensor_assign_buffers(ggml_add_inplace(gctx, hidden_states, residual));
+  hidden_states = ggml_add_inplace(gctx, hidden_states, residual);
   return hidden_states;
 }
 
@@ -639,17 +607,17 @@ QwenModel::QwenModel(ModelContext *ctx, const QwenConfig &config)
 auto QwenModel::forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
   ggml_tensor *KQ_pos = pos_ids_gen_(gctx, input_ids->ne[0], n_past, n_ctx);
-  if(KQ_pos){
-    tensor_to_device(KQ_pos);
-  }
+  // if(KQ_pos){
+  //   tensor_to_device(KQ_pos);
+  // }
   ggml_tensor *hidden_states = embed_tokens.forward(ctx, input_ids);
   for (const auto &layer : layers) {
     ggml_set_scratch(gctx, ctx->scratch);
     hidden_states = layer.forward(ctx, hidden_states, KQ_pos,n_past, n_ctx);
   }
-  if(KQ_pos){
-    tensor_to_cpu(KQ_pos);
-  }
+  // if(KQ_pos){
+  //   tensor_to_cpu(KQ_pos);
+  // }
   ggml_scratch empty_scratch = {0, 0, nullptr};
   ggml_set_scratch(gctx, empty_scratch);
   hidden_states = norm.forward(ctx, hidden_states, 1e-6f);
@@ -668,17 +636,17 @@ QwenMoeModel::QwenMoeModel(ModelContext *ctx, const QwenMoeConfig &config)
 auto QwenMoeModel::forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx,  int num_experts, int num_experts_per_tok) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
   ggml_tensor *KQ_pos = pos_ids_gen_(gctx, input_ids->ne[0], n_past, n_ctx);
-  if(KQ_pos){
-    tensor_to_device(KQ_pos);
-  }
+  // if(KQ_pos){
+  //   tensor_to_device(KQ_pos);
+  // }
   ggml_tensor *hidden_states = embed_tokens.forward(ctx, input_ids);
   for (const auto &layer : layers) {
     ggml_set_scratch(gctx, ctx->scratch);
     hidden_states = layer.forward(ctx, hidden_states, KQ_pos, n_past, n_ctx, num_experts, num_experts_per_tok);
   }
-  if(KQ_pos){
-    tensor_to_cpu(KQ_pos);
-  }
+  // if(KQ_pos){
+  //   tensor_to_cpu(KQ_pos);
+  // }
 
   ggml_scratch empty_scratch = {0, 0, nullptr};
   ggml_set_scratch(gctx, empty_scratch);
@@ -688,12 +656,11 @@ auto QwenMoeModel::forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past
 
 QwenForCausalLM::QwenForCausalLM(const QwenConfig &config)
   : config(config) {
+
   ctx_.compute_buffer.resize(MEM_SIZE);
   ctx_.scratch_buffer.resize(SCRATCH_SIZE);
   ctx_.scratch = {0, ctx_.scratch_buffer.size(), ctx_.scratch_buffer.data()};
-#ifdef GGML_USE_CUBLAS
-  ggml_cuda_set_scratch_size(SCRATCH_SIZE);
-#endif
+
   constexpr size_t tensor_ovhd = GGML_TENSOR_SIZE + GGML_OBJECT_SIZE;
   const size_t ctx_w_size = (3 + config.num_hidden_layers * 12) * tensor_ovhd;
   const size_t ctx_kv_size = 2 * config.num_hidden_layers *
@@ -703,6 +670,24 @@ QwenForCausalLM::QwenForCausalLM(const QwenConfig &config)
   ctx_.ctx_kv = make_unique_ggml_context(ctx_kv_size + 1 * MB, nullptr, false); // 1MB extra for MPS
 
   transformer = QwenModel(&ctx_, config);
+  int n_gpu_layers = 1;
+  #ifdef GGML_USE_METAL
+      if (n_gpu_layers > 0) {
+          fprintf(stderr, "%s: using Metal backend\n", __func__);
+          ggml_backend_metal_log_set_callback(ggml_log_callback_default, nullptr);
+          transformer.backend = ggml_backend_metal_init();
+          if (!transformer.backend) {
+              fprintf(stderr, "%s: ggml_backend_metal_init() failed\n", __func__);
+          }
+      }
+  #endif
+
+      if (!transformer.backend) {
+          // fallback to CPU backend
+          fprintf(stderr, "%s: using CPU backend\n", __func__);
+          transformer.backend = ggml_backend_cpu_init();
+      }
+
   lm_head = Linear(&ctx_, config.hidden_size, config.vocab_size, false);
   QWEN_CHECK(ggml_used_mem(ctx_.ctx_w.get()) == ggml_get_mem_size(ctx_.ctx_w.get())) << "corrupted model weights";
   QWEN_CHECK(ggml_used_mem(ctx_.ctx_kv.get()) == ctx_kv_size) << "corrupted kv cache";
@@ -815,25 +800,25 @@ QwenMoeForCausalLM::QwenMoeForCausalLM(const QwenMoeConfig &config)
 }
 
 QwenForCausalLM::~QwenForCausalLM() {
-  for (auto &item : state_dict_) {
-    tensor_to_cpu(item.second);
-  }
+//   for (auto &item : state_dict_) {
+//     tensor_to_cpu(item.second);
+//   }
 
-  for (auto &layer : transformer.layers) {
-    tensor_to_cpu(layer.attn.k_cache);
-    tensor_to_cpu(layer.attn.v_cache);
-  }
-}
+//   for (auto &layer : transformer.layers) {
+//     tensor_to_cpu(layer.attn.k_cache);
+//     tensor_to_cpu(layer.attn.v_cache);
+//   }
+// }
 
-QwenMoeForCausalLM::~QwenMoeForCausalLM() {
-  for (auto &item : state_dict_) {
-    tensor_to_cpu(item.second);
-  }
+// QwenMoeForCausalLM::~QwenMoeForCausalLM() {
+//   for (auto &item : state_dict_) {
+//     tensor_to_cpu(item.second);
+//   }
 
-  for (auto &layer : transformer.layers) {
-    tensor_to_cpu(layer.attn.k_cache);
-    tensor_to_cpu(layer.attn.v_cache);
-  }
+//   for (auto &layer : transformer.layers) {
+//     tensor_to_cpu(layer.attn.k_cache);
+//     tensor_to_cpu(layer.attn.v_cache);
+//   }
 }
 
 auto QwenForCausalLM::forward_graph_compute(const std::vector<int> &input_ids, int n_past, int n_ctx,int n_threads, bool is_decoding) -> ggml_tensor*{
@@ -855,17 +840,13 @@ auto QwenForCausalLM::forward_graph_compute(const std::vector<int> &input_ids, i
   memcpy(curr_input_ids->data, input_ids.data() + n_past, ggml_nbytes(curr_input_ids));
 
   ggml_tensor *lm_logits = forward(&ctx_, curr_input_ids, n_past, n_ctx, is_decoding);
-  lm_logits->backend = GGML_BACKEND_CPU;
+  // lm_logits->backend = GGML_BACKEND_CPU;
   // lm_logits->backend = GGML_BACKEND_TYPE_CPU; //newer ggml
 
 
   ggml_build_forward_expand(ctx_.gf, lm_logits);
-#ifdef GGML_USE_METAL
-  ggml_metal_graph_compute(ctx_.ctx_metal.get(), ctx_.gf);
-#else
   ggml_graph_compute_helper(ctx_.work_buffer, ctx_.gf, n_threads);
-#endif
-  // std::cout << lm_logits -> ne[1] << std::endl;
+
   return lm_logits;
 }
 
@@ -1045,13 +1026,13 @@ auto QwenForCausalLM::load(ModelLoader &loader) -> void {
     ggml_tensor *tensor = item.second;
     loader.read_tensor(name, tensor);
     if (name != "model.embed_tokens.weight") {
-      tensor_to_device(tensor);
+      // tensor_to_device(tensor);
     }
   }
 
   for (auto &layer : transformer.layers) {
-    tensor_to_device(layer.attn.k_cache);
-    tensor_to_device(layer.attn.v_cache);
+    // tensor_to_device(layer.attn.k_cache);
+    // tensor_to_device(layer.attn.v_cache);
   }
 
   ctx_.weight_buffer = std::string_view(loader.data, loader.size);
@@ -1063,14 +1044,14 @@ auto QwenMoeForCausalLM::load(ModelLoader &loader) -> void {
     const std::string &name = item.first;
     ggml_tensor *tensor = item.second;
     loader.read_tensor(name, tensor);
-    if (name != "model.embed_tokens.weight") {
-      tensor_to_device(tensor);
-    }
+    // if (name != "model.embed_tokens.weight") {
+    //   tensor_to_device(tensor);
+    // }
   }
 
   for (auto &layer : transformer.layers) {
-    tensor_to_device(layer.attn.k_cache);
-    tensor_to_device(layer.attn.v_cache);
+    // tensor_to_device(layer.attn.k_cache);
+    // tensor_to_device(layer.attn.v_cache);
   }
 
   ctx_.weight_buffer = std::string_view(loader.data, loader.size);
@@ -1087,9 +1068,9 @@ auto QwenForCausalLM::forward(
   ggml_tensor *transformer_outputs = transformer.forward(ctx, input_ids, n_past, n_ctx);
   // NOTE: only compute next_token_logits for the last token
   if (is_decoding && input_ids->ne[0] > 1) {
-    transformer_outputs = tensor_assign_buffers(
+    transformer_outputs = 
       ggml_view_1d(ctx->ctx_b.get(), transformer_outputs, config.hidden_size,
-                   (input_ids->ne[0] - 1) * config.hidden_size * ggml_element_size(transformer_outputs)));
+                   (input_ids->ne[0] - 1) * config.hidden_size * ggml_element_size(transformer_outputs));
   }
   ggml_tensor *lm_logits = lm_head.forward(ctx, transformer_outputs);
   return lm_logits;
@@ -1105,9 +1086,9 @@ auto QwenMoeForCausalLM::forward(
   ggml_tensor *transformer_outputs = transformer.forward(ctx, input_ids, n_past, n_ctx, config.num_experts, config.num_experts_per_tok);
   // NOTE: only compute next_token_logits for the last token
   if (is_decoding && input_ids->ne[0] > 1) {
-    transformer_outputs = tensor_assign_buffers(
+    transformer_outputs = 
       ggml_view_1d(ctx->ctx_b.get(), transformer_outputs, config.hidden_size,
-                   (input_ids->ne[0] - 1) * config.hidden_size * ggml_element_size(transformer_outputs)));
+                   (input_ids->ne[0] - 1) * config.hidden_size * ggml_element_size(transformer_outputs));
   }
   ggml_tensor *lm_logits = lm_head.forward(ctx, transformer_outputs);
   return lm_logits;

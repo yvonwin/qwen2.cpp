@@ -99,12 +99,12 @@ TEST_F(QwenTest, Embedding) {
   ptr = read_tensor_data(ptr, y);
   ASSERT_EQ(ptr, mapped_file.data + mapped_file.size);
 
-  tensor_to_device(x);
-  tensor_to_device(y);
+  // tensor_to_device(x);
+  // tensor_to_device(y);
 
   Embedding m(&ctx, 48, 256);
   m.weight->data = embed_tokens->data;
-  tensor_to_device(m.weight);
+  // tensor_to_device(m.weight);
 
   ggml_tensor *out = m.forward(&ctx, x);
   EXPECT_EQ(out->backend, x->backend);
@@ -115,9 +115,9 @@ TEST_F(QwenTest, Embedding) {
 
   expect_all_close(y, out);
 
-  tensor_to_cpu(m.weight);
-  tensor_to_cpu(y);
-  tensor_to_cpu(x);
+  // tensor_to_cpu(m.weight);
+  // tensor_to_cpu(y);
+  // tensor_to_cpu(x);
 }
 
 
@@ -138,17 +138,17 @@ TEST_F(QwenTest, QwenMLP) {
   ptr = read_tensor_data(ptr, ref);
   ASSERT_EQ(ptr, mapped_file.data + mapped_file.size);
 
-  tensor_to_device(x);
-  tensor_to_device(ref);
+  // tensor_to_device(x);
+  // tensor_to_device(ref);
 
   QwenMLP model(&ctx, 32, 96);
   model.up_proj.weight->data = up_proj->data;
   model.gate_proj.weight->data = gate_proj->data;
   model.down_proj.weight->data = down_proj->data;
 
-  tensor_to_device(model.up_proj.weight);
-  tensor_to_device(model.gate_proj.weight);
-  tensor_to_device(model.down_proj.weight);
+  // tensor_to_device(model.up_proj.weight);
+  // tensor_to_device(model.gate_proj.weight);
+  // tensor_to_device(model.down_proj.weight);
 
   ggml_tensor *out = model.forward(&ctx, x);
   EXPECT_EQ(out->backend, x->backend);
@@ -159,11 +159,11 @@ TEST_F(QwenTest, QwenMLP) {
 
   expect_all_close(ref, out);
 
-  tensor_to_cpu(model.up_proj.weight);
-  tensor_to_cpu(model.gate_proj.weight);
-  tensor_to_cpu(model.down_proj.weight);
-  tensor_to_cpu(x);
-  tensor_to_cpu(ref);
+  // tensor_to_cpu(model.up_proj.weight);
+  // tensor_to_cpu(model.gate_proj.weight);
+  // tensor_to_cpu(model.down_proj.weight);
+  // tensor_to_cpu(x);
+  // tensor_to_cpu(ref);
 }
 
 } // namespace qwen

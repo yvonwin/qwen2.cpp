@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include "ggml-alloc.h"
 #include "tiktoken.h"
 
 #include <ggml.h>
@@ -18,11 +19,21 @@
 #include <ggml-metal.h>
 #endif
 
+#include "ggml/ggml.h"
+#include "ggml/ggml-alloc.h"
+#include "ggml/ggml-backend.h"
 namespace qwen {
 
 class QwenTokenizer;
 
 // ===== common =====
+
+static void ggml_log_callback_default(ggml_log_level level, const char * text, void * user_data) {
+    (void) level;
+    (void) user_data;
+    fputs(text, stderr);
+    fflush(stderr);
+}
 
 static constexpr size_t MB = 1024 * 1024;
 
@@ -43,11 +54,9 @@ class LogMessageFatal {
     if (!(cond)) \
     QWEN_THROW << "check failed (" #cond ") "
 
-ggml_tensor *tensor_assign_buffers(ggml_tensor *tensor);
+// auto tensor_to_device(ggml_tensor *tensor) -> ggml_tensor *;
 
-auto tensor_to_device(ggml_tensor *tensor) -> ggml_tensor *;
-
-auto tensor_to_cpu(ggml_tensor *tensor) -> ggml_tensor *;
+// auto tensor_to_cpu(ggml_tensor *tensor) -> ggml_tensor *;
 
 auto get_num_physical_cores() -> int;
 auto get_default_num_threads() -> int;
@@ -64,19 +73,19 @@ static inline auto make_unique_ggml_context(
   return unique_ggml_context_t(ggml_init({mem_size, mem_buffer, no_alloc}));
 }
 
-#ifdef GGML_USE_METAL
-struct ggml_metal_context_deleter_t {
-  auto operator()(ggml_metal_context *ctx) const noexcept -> void { ggml_metal_free(ctx); }
-};
+// #ifdef GGML_USE_METAL
+// struct ggml_metal_context_deleter_t {
+//   auto operator()(ggml_metal_context *ctx) const noexcept -> void { ggml_metal_free(ctx); }
+// };
 
-using unique_ggml_metal_context_t = std::unique_ptr<ggml_metal_context, ggml_metal_context_deleter_t>;
+// using unique_ggml_metal_context_t = std::unique_ptr<ggml_metal_context, ggml_metal_context_deleter_t>;
 
-static inline auto make_unique_ggml_metal_context(
-  int n_cb
-) -> unique_ggml_metal_context_t {
-  return unique_ggml_metal_context_t(ggml_metal_init(n_cb));
-}
-#endif
+// static inline auto make_unique_ggml_metal_context(
+//   int n_cb
+// ) -> unique_ggml_metal_context_t {
+//   return unique_ggml_metal_context_t(ggml_metal_init(n_cb));
+// }
+// #endif
 
 struct uninitialized_char {
   char m;
@@ -90,15 +99,16 @@ struct ModelContext {
   unique_ggml_context_t ctx_w;  // weight
   unique_ggml_context_t ctx_kv; // kv cache
   unique_ggml_context_t ctx_b;  // buffer
-#ifdef GGML_USE_METAL
-  unique_ggml_metal_context_t ctx_metal;
-#endif
+
   ggml_cgraph *gf;
   ggml_scratch scratch;
   std::vector<uninitialized_char> compute_buffer; // BLAS buffer
   std::vector<uninitialized_char> scratch_buffer; // intermediate tensor buffer
   std::string_view weight_buffer;                 // mapped weight
   std::vector<uninitialized_char> work_buffer;    // temporary buffer for graph computing
+
+  ggml_backend_buffer_t buffer_w;
+  ggml_backend_buffer_t buffer_kv;
 
   auto init_device_context() -> void;
 };
@@ -472,6 +482,7 @@ class QwenModel {
     std::vector<QwenBlock> layers;
     RMSNorm norm;
     BasicPositionIdsGenerator pos_ids_gen_;
+        ggml_backend_t backend = NULL;
 };
 
 class QwenMoeModel {
@@ -528,6 +539,8 @@ class QwenForCausalLM {
     QwenConfig config;
     QwenModel transformer;
     Linear lm_head;
+
+
 
     private:
       ModelContext ctx_;
