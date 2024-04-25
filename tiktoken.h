@@ -12,8 +12,8 @@
 
 namespace tiktoken {
 
-static uint64_t _max_size() {
-  return std::numeric_limits<uint64_t>::max();
+static int _max_size() {
+  return std::numeric_limits<int>::max();
 }
 
 static auto _byte_pair_merge(
