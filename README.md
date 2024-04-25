@@ -1,6 +1,6 @@
 # qwen2.cpp
 
-This project is an independent C++ implementation of [Qwen1.5](https://github.com/QwenLM/Qwen1.5).
+This project is an independent C++ implementation of [Qwen1.5 family](https://github.com/QwenLM/Qwen1.5).
 
 ![](docs/main_demo.jpg)
 
@@ -11,6 +11,7 @@ This project is an independent C++ implementation of [Qwen1.5](https://github.co
 - **`2024/04/09`** Support [Qwen1.5-MoEA2.7B](https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat).
 - **`2024/04/11`** The platform has been updated to support Windows. It has been tested on Visual Studio 2022, and both CUDA and CPU functionalities are confirmed to work correctly.
 - **`2024/04/18`** Tested on [CodeQwen1.5-7B](https://huggingface.co/Qwen/CodeQwen1.5-7B) The model's architecture is verified to be correct. However, it uses SentencePiece for tokenization.You can test it with hf tokenizer like `examples/codeqwen.py`.
+- **`2024/04/25`** Support [Llama3-8B](https://huggingface.co/meta-llama/Meta-Llama-3-8B)  Llama3 utilizes tiktoken as well, hence it is supported.
 
 ## Features
 
@@ -23,7 +24,7 @@ Highlights:
 Support Matrix:
 * Hardwares: x86/arm CPU, NVIDIA GPU, Apple Silicon GPU
 * Platforms: Linux, MacOS, Winodws
-* Models: [Qwen1.5](https://github.com/QwenLM/Qwen1.5) family
+* Models: [Qwen1.5](https://github.com/QwenLM/Qwen1.5) family and Llama3
 
 ## Test in colab
 
@@ -77,6 +78,7 @@ cmake -B build && cmake --build build -j --config Release
 ```
 
 Now you may chat with the quantized Qwen-Chat model by running:
+
 ```sh
 ./build/bin/main -m qwen2_32b-ggml.bin  -p 你想活出怎样的人生 -s "你是一个猫娘"
 # 作为一只猫娘，我想要活出充满活力、自由自在和温暖幸福的人生。
@@ -85,6 +87,8 @@ Now you may chat with the quantized Qwen-Chat model by running:
 # 最后，我希望能够拥有温暖幸福的家庭和朋友。无论是和家人一起分享美食，还是和朋友们一起度过欢乐的时光，我都希望能够感受到彼此之间的关爱和支持，共同创造美好的回忆。
 # 总的来说，我想要活出一种平衡和谐的生活，既有猫的自由和活力，又有温暖的家庭和朋友带来的幸福。
 ```
+
+The default tiktoken file is `qwen.tiktoken`. For Llama3, download it from [this link](https://huggingface.co/meta-llama/Meta-Llama-3-8B/tree/main/original).
 
 To run the model in interactive mode, add the `-i` flag. For example:
 ```sh
@@ -286,9 +290,9 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 
 - [x] Qwen1.5 32b
 - [x] Qwen1.5 A2.7b moe: It's necessary to modify the value of `GGML_MAX_SRC` from 10 to 62 for proper operation.
-- [x] Codeqwen  At this time, I prefer not to add any additional libraries.
+- [x] Codeqwen
 - [ ] Sync ggml: The interface of the Metal API and cuBLAS has changed significantly in later versions, so we will keep this version for now.
-- [ ] RAG explore.
+- [ ] upo explore.
 
 ## Acknowledgementss
 
