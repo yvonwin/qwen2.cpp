@@ -117,7 +117,7 @@ class Embedding {
 class Linear {
   public:
     Linear() : weight(nullptr), bias(nullptr) {}
-    Linear(ModelContext *ctx, int in_features, int out_features, bool use_bias = true)
+    Linear(ModelContext *ctx, int in_features, int out_features, bool use_bias = false)
       : weight(ggml_new_tensor_2d(ctx->ctx_w.get(), ctx->dtype, in_features, out_features)),
         bias(use_bias ? ggml_new_tensor_1d(ctx->ctx_w.get(), GGML_TYPE_F32, out_features) : nullptr) {}
 
@@ -278,6 +278,8 @@ enum class ModelType {
     QWEN1 = 1,  // abort
     QWEN2 = 2,
     QWEN2MOE = 3,
+    CODEQWEN = 4,
+    LLAMA3 = 5 
 };
 
 struct QwenConfig {
@@ -306,6 +308,11 @@ struct QwenMoeConfig : QwenConfig {
   int norm_topk_prob;
 };
 
+struct Llama3Config : QwenConfig{
+  // float rope_theta;
+};
+
+
 struct ChatMessage{
   std::string role;
   std::string content;
@@ -333,7 +340,7 @@ class QwenTokenizer {
 
     auto decode(const std::vector<int> &ids) const -> std::string;  
 
-    std::vector<int> encode_messages(const std::vector<ChatMessage> &messages, int max_length) const;
+    virtual std::vector<int> encode_messages(const std::vector<ChatMessage> &messages, int max_length) const;
 
     ChatMessage decode_message(const std::vector<int> &ids) const{
        return {ChatMessage::ROLE_ASSISTANT, decode(ids)};
@@ -352,10 +359,37 @@ class QwenTokenizer {
     static void check_chat_messages(const std::vector<ChatMessage> &messages);
 };
 
+class LlamaTokenizer : public QwenTokenizer{
+  public:
+    LlamaTokenizer(const std::string & tiktoken_path, const QwenConfig &config);
+
+    std::vector<int> encode_messages(const std::vector<ChatMessage> &messages, int max_length) const;
+
+    static std::string build_prompt(const std::vector<ChatMessage> &messages);
+
+};
+
 class QwenAttention {
   public:
     QwenAttention() : num_attention_heads(0), num_kv_heads(0) {}
     QwenAttention(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int max_length);
+
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const -> ggml_tensor *;
+
+    int num_attention_heads;
+    int num_kv_heads;
+    Linear q_proj;
+    Linear k_proj;
+    Linear v_proj;
+    Linear o_proj;
+    ggml_tensor *k_cache; // [n_head, maxlen, head_size]
+    ggml_tensor *v_cache; // [n_head, head_size, maxlen]
+};
+
+class LlamaAttention: public QwenAttention{
+  public:
+    LlamaAttention() : num_attention_heads(0), num_kv_heads(0) {}
+    LlamaAttention(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int max_length);
 
     auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const -> ggml_tensor *;
 
@@ -434,6 +468,24 @@ class QwenBlock {
     QwenMLP mlp;
 };
 
+class LlamaBlock:public QwenBlock{
+  public:
+    LlamaBlock() = default;
+    LlamaBlock(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int intermediate_size, int max_length)
+      : input_layernorm(ctx, hidden_size, false),
+        attn(ctx, hidden_size, num_attention_heads, num_kv_heads, max_length),
+        post_attention_layernorm(ctx, hidden_size, false),
+        mlp(ctx, hidden_size, intermediate_size) {}
+
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos,int n_past, int n_ctx) const -> ggml_tensor *;
+
+    RMSNorm input_layernorm;
+    LlamaAttention attn;
+    RMSNorm post_attention_layernorm;
+    QwenMLP mlp;
+
+};
+
 struct BasicPositionIdsGenerator {
     ggml_tensor *operator()(ggml_context *ctx, int qlen, int n_past, int n_ctx) const {
         ggml_tensor *position_ids = ggml_new_tensor_1d(ctx, GGML_TYPE_I32, qlen);
@@ -488,9 +540,23 @@ class QwenMoeModel {
     BasicPositionIdsGenerator pos_ids_gen_;
 };
 
+class LlamaModel: public QwenModel{
+  public:
+    LlamaModel() = default;
+    LlamaModel(ModelContext *ctx, const Llama3Config &config);
+
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx) const -> ggml_tensor *;
+
+    Embedding embed_tokens;
+    std::vector<LlamaBlock> layers;
+    RMSNorm norm;
+    BasicPositionIdsGenerator pos_ids_gen_;
+};
+
 class QwenForCausalLM {
   public:
     QwenForCausalLM(const QwenConfig &config);
+    QwenForCausalLM(int test){};
     ~QwenForCausalLM();
 
     auto generate_next_token(
@@ -551,6 +617,25 @@ class QwenMoeForCausalLM : public QwenForCausalLM {
   private:
     ModelContext ctx_;
     std::vector<std::pair<std::string, ggml_tensor *>> state_dict_;
+};
+
+class Llama3ForCausalLM : public QwenForCausalLM{
+  public:
+    Llama3ForCausalLM(const Llama3Config &config);  // Declaration
+    ~Llama3ForCausalLM();
+    // Override methods here if needed
+
+    auto load(ModelLoader &loader) -> void override;
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, bool is_decoding) const -> ggml_tensor * override;
+
+    static constexpr size_t MEM_SIZE     = 2000 * MB;  // 2k context
+    static constexpr size_t SCRATCH_SIZE = 2000 * MB; // 2k context
+    Llama3Config config;
+    LlamaModel transformer;
+  
+  private:
+    ModelContext ctx_;
+    std::vector<std::pair<std::string, ggml_tensor *>> state_dict_; 
 };
 
 // ===== pipeline =====

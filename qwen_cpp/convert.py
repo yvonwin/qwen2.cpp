@@ -42,6 +42,7 @@ class ModelType(Enum):
     QWEN2 = 2
     QWEN2MOE = 3
     CODEQWEN = 4  # not use now
+    Llama3 = 5 
 
 
 def quantize_q8_0(tensor: torch.Tensor) -> torch.CharTensor:
@@ -226,6 +227,60 @@ class QwenConverter:
         ]
         dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
 
+class Llama3Converter:
+    """
+    主要是tokenizer的区别。
+    还有qkv没有bias
+    """
+    MODEL_TYPE = ModelType.Llama3
+    @classmethod
+    def convert(cls, f, model, tokenizer, ggml_type):
+        f.write(b"ggml")  # magic
+        f.write(struct.pack("ii", cls.MODEL_TYPE.value, 1))  # model type & version
+        cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type) # generation_config is not use now.
+        cls.dump_model(f, model, ggml_type)
+
+    @staticmethod
+    def dump_config(f, config, generation_config, tokenizer, ggml_type):
+        config_values = [
+            ggml_type.value,
+            config.vocab_size,
+            config.hidden_size,
+            config.num_attention_heads,
+            config.num_key_value_heads,
+            config.num_hidden_layers,
+            config.intermediate_size,
+            config.max_position_embeddings,
+            config.eos_token_id,                             # eos 151645
+            128001, # pad
+            128000, # <|begin_of_text|>
+            128009, # "<|end_of_text|>"
+        ]
+        f.write(struct.pack("i" * len(config_values), *config_values))
+
+    @staticmethod
+    def dump_model(f, model, ggml_type):
+        weight_names = ["model.embed_tokens.weight"]
+        for i in range(model.config.num_hidden_layers):
+            weight_names += [
+                f"model.layers.{i}.input_layernorm.weight",
+                f"model.layers.{i}.self_attn.q_proj.weight",
+                f"model.layers.{i}.self_attn.k_proj.weight",
+                f"model.layers.{i}.self_attn.v_proj.weight",
+                f"model.layers.{i}.self_attn.o_proj.weight",
+                f"model.layers.{i}.post_attention_layernorm.weight",
+                f"model.layers.{i}.mlp.gate_proj.weight",
+                f"model.layers.{i}.mlp.up_proj.weight",
+                f"model.layers.{i}.mlp.down_proj.weight",
+            ]
+
+        weight_names += [
+            "model.norm.weight",
+            "lm_head.weight",
+        ]
+        print(len(weight_names))
+        dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
+
 class Qwen2Converter:
     MODEL_TYPE = ModelType.QWEN2
     @classmethod
@@ -406,7 +461,7 @@ def convert(f: BinaryIO, model_name_or_path: str, dtype: str = "q4_0"):
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
     model = AutoModelForCausalLM.from_pretrained(model_name_or_path)
 
-    # print(model)
+    print(model)
     # state_dict = model.state_dict()
     # keys = state_dict.keys()
     # print(keys)
@@ -429,6 +484,10 @@ def convert(f: BinaryIO, model_name_or_path: str, dtype: str = "q4_0"):
     elif model.config.architectures[0]=="Qwen2MoeForCausalLM":
         print('Convert Qwen1.5-Moe')
         Qwen2MOEConverter.convert(f, model, tokenizer, ggml_type)
+
+    elif model.config.architectures[0]=="LlamaForCausalLM":
+        print("Convert Llama3")
+        Llama3Converter.convert(f, model, tokenizer, ggml_type)
     else:
         print('Warning: Qwen1 is not supported now')
         QwenConverter.convert(f, model, tokenizer, ggml_type)
