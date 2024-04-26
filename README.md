@@ -1,12 +1,14 @@
 # qwen2.cpp
 
-This project is an independent C++ implementation of [Qwen1.5 family](https://github.com/QwenLM/Qwen1.5).
+[中文版](README_zh.md)
+
+This project is an independent C++ implementation of [Qwen1.5 family](https://github.com/QwenLM/Qwen1.5) and Llama3.
 
 ![](docs/main_demo.jpg)
 
 ## Updates
 - **`2024/03/26`**  Update to Qwen1.5. Basic functionality has been successfully ported. 
-- **`2024/03/28`**  Introduced a system prompt feature for user input; Add cli and web demo, support oai server.
+- **`2024/03/28`**  Introduced a system prompt feature for user input; Add cli and web demo, support oai server, langchain_api.
 - **`2024/04/07`** Support [Qwen1.5-32B](https://huggingface.co/Qwen/Qwen1.5-32B-Chat).
 - **`2024/04/09`** Support [Qwen1.5-MoEA2.7B](https://huggingface.co/Qwen/Qwen1.5-MoE-A2.7B-Chat).
 - **`2024/04/11`** The platform has been updated to support Windows. It has been tested on Visual Studio 2022, and both CUDA and CPU functionalities are confirmed to work correctly.
@@ -60,6 +62,7 @@ The original model (`-i <model_name_or_path>`) can be a HuggingFace model name o
 * Qwen1.5-32B: `Qwen/Qwen1.5-32B-Chat`
 * Qwen1.5-72B: `Qwen/Qwen1.5-32B-Chat`
 * Qwen1.5-MoeA2.7B: `Qwen/Qwen1.5-MoE-A2.7B-Chat`
+* Llama-3-8B-Instruct: `meta-llama/Meta-Llama-3-8B-Instruct`
 
 You are free to try any of the below quantization types by specifying `-t <type>`:
 * `q4_0`: 4-bit integer quantization with fp16 scales.
@@ -289,10 +292,10 @@ To format the code, run `make lint` inside the `build` folder. You should have `
 ## TODO
 
 - [x] Qwen1.5 32b
-- [x] Qwen1.5 A2.7b moe: It's necessary to modify the value of `GGML_MAX_SRC` from 10 to 62 for proper operation.
+- [x] Qwen1.5 A2.7b moe: CPU ONLY It's necessary to modify the value of `GGML_MAX_SRC` from 10 to 62 for proper operation.
 - [x] Codeqwen
 - [ ] Sync ggml: The interface of the Metal API and cuBLAS has changed significantly in later versions, so we will keep this version for now.
-- [ ] upo explore.
+- [ ] Rag explore.
 
 ## Acknowledgementss
 
