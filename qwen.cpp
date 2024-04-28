@@ -554,6 +554,7 @@ LlamaAttention::LlamaAttention(ModelContext *ctx, int hidden_size, int num_atten
 auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const -> ggml_tensor * {
   ggml_context *gctx = ctx->ctx_b.get();
 
+  float rope_theta = 1000000.0;
   const int hidden_size = hidden_states->ne[0];
   const int qlen = hidden_states->ne[1];
   const int head_size = hidden_size / num_attention_heads;
@@ -577,7 +578,7 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
     query_layer = tensor_assign_buffers(ggml_cont(gctx, query_layer));
   }
 #endif
-  query_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx));
+  query_layer = tensor_assign_buffers(ggml_rope_custom_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx, 0, rope_theta, 1.f, 0.0f, 1.0f, 0.0f, 0.0f)); 
   query_layer = tensor_assign_buffers(ggml_permute(gctx, query_layer, 0, 2, 1, 3)); // [heads, qlen, head_size]
 
 #ifdef GGML_USE_CUBLAS
@@ -585,7 +586,7 @@ auto QwenAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_
     key_layer = tensor_assign_buffers(ggml_cont(gctx, key_layer));
   }
 #endif
-  key_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, key_layer, KQ_pos, rope_dim, 2, n_ctx));
+  key_layer = tensor_assign_buffers(ggml_rope_custom_inplace(gctx, key_layer, KQ_pos, rope_dim, 2, n_ctx, 0, rope_theta, 1.f, 0.0f, 1.0f, 0.0f, 0.0f)); 
   key_layer = tensor_assign_buffers(ggml_permute(gctx, key_layer, 0, 2, 1, 3)); // [kv_heads, qlen, head_size]
   value_layer = tensor_assign_buffers(ggml_permute(gctx, value_layer, 1, 2, 0, 3)); // [kv_heads, head_size, qlen]
 
@@ -634,6 +635,7 @@ auto LlamaAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml
   // std::cout << "debug llamaattention" << std::endl;
   ggml_context *gctx = ctx->ctx_b.get();
 
+  float rope_theta = 500000.0;
   const int hidden_size = hidden_states->ne[0];
   const int qlen = hidden_states->ne[1];
   const int head_size = hidden_size / num_attention_heads;
@@ -657,7 +659,7 @@ auto LlamaAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml
     query_layer = tensor_assign_buffers(ggml_cont(gctx, query_layer));
   }
 #endif
-  query_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx));
+  query_layer = tensor_assign_buffers(ggml_rope_custom_inplace(gctx, query_layer, KQ_pos, rope_dim, 2, n_ctx, 0, rope_theta, 1.f, 0.0f, 1.0f, 0.0f, 0.0f));
   query_layer = tensor_assign_buffers(ggml_permute(gctx, query_layer, 0, 2, 1, 3)); // [heads, qlen, head_size]
 
 #ifdef GGML_USE_CUBLAS
@@ -665,7 +667,7 @@ auto LlamaAttention::forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml
     key_layer = tensor_assign_buffers(ggml_cont(gctx, key_layer));
   }
 #endif
-  key_layer = tensor_assign_buffers(ggml_rope_inplace(gctx, key_layer, KQ_pos, rope_dim, 2, n_ctx));
+  key_layer = tensor_assign_buffers(ggml_rope_custom_inplace(gctx, key_layer, KQ_pos, rope_dim, 2, n_ctx, 0, rope_theta, 1.f, 0.0f, 1.0f, 0.0f, 0.0f));
   key_layer = tensor_assign_buffers(ggml_permute(gctx, key_layer, 0, 2, 1, 3)); // [kv_heads, qlen, head_size]
   value_layer = tensor_assign_buffers(ggml_permute(gctx, value_layer, 1, 2, 0, 3)); // [kv_heads, head_size, qlen]
 
