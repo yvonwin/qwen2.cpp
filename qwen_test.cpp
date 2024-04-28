@@ -166,4 +166,138 @@ TEST_F(QwenTest, QwenMLP) {
   tensor_to_cpu(ref);
 }
 
+// model test
+
+struct TokenizerTestCase {
+    std::string prompt;
+    std::vector<int> input_ids;
+    bool skip_decode = false;
+};
+
+static bool equal(const std::vector<int> &a, const std::vector<int> &b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < a.size(); i++) {
+        if (a[i] != b[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void check_tokenizer(const QwenTokenizer *tokenizer, const std::vector<TokenizerTestCase> &cases) {
+    for (const auto &c : cases) {
+        // encode
+        std::vector<int> input_ids = tokenizer->encode(c.prompt, 2048);
+        EXPECT_TRUE(equal(input_ids, c.input_ids));
+        if (!c.skip_decode) {
+            // decode
+            std::string output = tokenizer->decode(c.input_ids);
+            EXPECT_EQ(output, c.prompt);
+        }
+    }
+}
+
+// ===== pipeline Test =====
+
+TEST(Pipeline, Qwen2){
+    fs::path model_path = fs::path(__FILE__).parent_path() / "qwen2_1.8b_f16.bin";
+    fs::path tiktoken_path = fs::path(__FILE__).parent_path() / "qwen.tiktoken";
+    if (!fs::exists(model_path)) {
+        GTEST_SKIP() << "Skipping qwen2 e2e test (ggml model not found)";
+    }
+    Pipeline pipeline(model_path.string(), tiktoken_path.string());
+    EXPECT_TRUE(dynamic_cast<QwenForCausalLM *>(pipeline.model.get()));
+
+    // tokenizer
+    {
+        std::vector<TokenizerTestCase> cases{
+            {"你好", {108386}},
+            {"你好！有什么我可以帮助你的吗？",
+             {108386, 6313, 104139, 109944, 100364, 103929, 101037, 11319}},
+            };
+        check_tokenizer(pipeline.tokenizer.get(), cases);
+    }
+
+    // prompter
+    {
+        EXPECT_EQ(QwenTokenizer::build_prompt({{ChatMessage::ROLE_SYSTEM, "You are a helpful assistant."}, {ChatMessage::ROLE_USER, "你好"}}), "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n你好<|im_end|>\n<|im_start|>assistant\n");
+    }
+
+    // memory test
+    {
+        GenerationConfig gen_config;
+        gen_config.max_length = 2048;
+        gen_config.max_context_length = gen_config.max_length - 1;
+        gen_config.do_sample = false;
+
+        std::ostringstream oss;
+        for (int i = 0; i < gen_config.max_context_length; i++) {
+            oss << "hello";
+        }
+        std::vector<ChatMessage> messages{{ChatMessage::ROLE_USER, oss.str()}};
+        pipeline.chat(messages, gen_config);
+    }
+
+    // chat
+    {
+        GenerationConfig gen_config;
+        gen_config.do_sample = false;
+        std::vector<ChatMessage> messages{{ChatMessage::ROLE_SYSTEM, "You are a helpful assistant."},{ChatMessage::ROLE_USER, "你好"}};
+        ChatMessage output = pipeline.chat(messages, gen_config);
+        EXPECT_EQ(output.content, "你好！有什么我可以帮助你的吗？");
+    }
+}
+
+
+TEST(Pipeline, Llama3){
+    fs::path model_path = fs::path(__FILE__).parent_path() / "llama3.bin";
+    fs::path tiktoken_path = fs::path(__FILE__).parent_path() / "llama3.tiktoken";
+    if (!fs::exists(model_path)) {
+        GTEST_SKIP() << "Skipping llama3 e2e test (ggml model not found)";
+    }
+    Pipeline pipeline(model_path.string(), tiktoken_path.string());
+    EXPECT_TRUE(dynamic_cast<QwenForCausalLM *>(pipeline.model.get()));
+
+    // tokenizer
+    {
+        std::vector<TokenizerTestCase> cases{
+            {"his is a test sentence.", {128000, 2028, 374, 264, 1296, 11914, 13, 128001}},
+            {"This is a response.",
+             {2028, 374, 264, 2077, 13}},
+            };
+        check_tokenizer(pipeline.tokenizer.get(), cases);
+    }
+
+    // prompter
+    {
+        EXPECT_EQ(QwenTokenizer::build_prompt({{ChatMessage::ROLE_SYSTEM, "You are a helpful assistant."}, {ChatMessage::ROLE_USER, "你好"}}), "<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\nYou are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n你好<|eot_id|><|start_header_id|>assistant<|end_header_id|>");
+    }
+
+    // memory test
+    {
+        GenerationConfig gen_config;
+        gen_config.max_length = 2048;
+        gen_config.max_context_length = gen_config.max_length - 1;
+        gen_config.do_sample = false;
+
+        std::ostringstream oss;
+        for (int i = 0; i < gen_config.max_context_length; i++) {
+            oss << "hello";
+        }
+        std::vector<ChatMessage> messages{{ChatMessage::ROLE_USER, oss.str()}};
+        pipeline.chat(messages, gen_config);
+    }
+
+    // chat
+    {
+        GenerationConfig gen_config;
+        gen_config.do_sample = false;
+        std::vector<ChatMessage> messages{{ChatMessage::ROLE_USER, "你好"}};
+        ChatMessage output = pipeline.chat(messages, gen_config);
+        EXPECT_EQ(output.content, "Hello! How can I help you today? Is there something you would like to talk about or ask me a question? I'm here to provide information and answer any questions you may have to the best of my ability. Feel free to ask me anything, and I'll do my best to assist you.");
+    }
+}
+
 } // namespace qwen

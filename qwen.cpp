@@ -472,7 +472,7 @@ std::string QwenTokenizer::build_prompt(const std::vector<ChatMessage> &messages
   // <|im_start|>assistant
 
 
-  oss_prompt << "<|im_start|>system\n" << messages.front().content << "<|im_end|>"; // apply system
+  oss_prompt << "<|im_start|>system\n" << messages.front().content << "<|im_end|>"; // apply system. we have default system prompt.
   
   for (size_t i = 1; i < messages.size(); i += 1) { // get all history messages
     if(messages[i].role == ChatMessage::ROLE_USER){
@@ -1348,10 +1348,8 @@ auto QwenForCausalLM::generate(
     if (streamer) {
       streamer->put({next_token_id});
     }
-
-    // if (next_token_id == config.eos_token_id || next_token_id == config.im_start_id || next_token_id == config.im_end_id ) {
-    // tmp just test llama3
-    if (next_token_id == config.eos_token_id || next_token_id == config.im_start_id || next_token_id == config.im_end_id | next_token_id == config.pad_token_id) {
+    // pad_token_id is also eos token.
+    if (next_token_id == config.eos_token_id || next_token_id == config.im_start_id || next_token_id == config.im_end_id || next_token_id == config.pad_token_id) {
       break;
     }
   }
