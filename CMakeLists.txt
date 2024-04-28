@@ -47,7 +47,7 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/source-charset:utf-8>")
 endif()
 
-add_library(qwen STATIC qwen.cpp)
+add_library(qwen STATIC qwen.cpp tokenizer/tiktoken.cpp)
 target_link_libraries(qwen PUBLIC re2::re2 ggml)
 
 # add_executable(main main.cpp)
@@ -85,7 +85,7 @@ if (QWEN_ENABLE_TESTING)
   include(GoogleTest)
 
   # Now simply link against gtest or gtest_main as needed. Eg
-  add_executable(qwen_test qwen_test.cpp)
+  add_executable(qwen_test qwen_test.cpp tokenizer/tiktoken.cpp)
   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_link_libraries(qwen_test PRIVATE qwen gtest_main)
   else()

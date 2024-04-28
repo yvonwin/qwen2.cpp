@@ -7,6 +7,7 @@
 
 struct Args {
     std::string model_path = "qwen2_1.8b_q4_0.bin";
+    std::string tiktoken_path = "qwen.tiktoken";
     std::string corpus_path = "tests/data/wikitext-2-raw/wiki.test.raw";
     int max_length = 1024;
     int stride = 512;
@@ -37,6 +38,8 @@ static Args parse_args(const std::vector<std::string> &argv) {
             exit(EXIT_SUCCESS);
         } else if (arg == "-m" || arg == "--model") {
             args.model_path = argv.at(++i);
+        } else if (arg == "--tiktoken") {
+            args.tiktoken_path = argv.at(++i);
         } else if (arg == "-f" || arg == "--file") {
             args.corpus_path = argv.at(++i);
         } else if (arg == "-l" || arg == "--max_length") {
@@ -95,7 +98,7 @@ static float cross_entropy(const ggml_tensor *input, const ggml_tensor *target) 
 // reference: https://huggingface.co/docs/transformers/perplexity
 static void perplexity(Args &args) {
     std::cout << "Loading model from " << args.model_path << " ...\n";
-    qwen::Pipeline pipeline(args.model_path, "qwen.tiktoken");
+    qwen::Pipeline pipeline(args.model_path, args.tiktoken_path);
 
     std::cout << "Loading corpus from " << args.corpus_path << " ...\n";
     std::string corpus = read_text(args.corpus_path);

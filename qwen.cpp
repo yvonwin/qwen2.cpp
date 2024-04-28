@@ -1,5 +1,5 @@
 #include "qwen.h"
-#include "base64.h"
+#include "tokenizer/base64.h"
 #include <fcntl.h>
 #include <fstream>
 #include <numeric>
@@ -321,6 +321,9 @@ auto RMSNorm::forward(ModelContext *ctx, ggml_tensor *input, float eps) const ->
 }
 
 // ===== Qwen =====
+
+
+// ===== Tokenizer =====
 
 // parse tiktoken file
 static std::pair<std::string, int> _parse(const std::string &line) {
@@ -1522,7 +1525,7 @@ Pipeline::Pipeline(const std::string &path, const std::string &tiktoken_path, in
 
   // load model
   model->load(loader);
-  std::cout<< "weight load complish"<<std::endl;
+  // std::cout<< "weight load complish"<<std::endl;
 
   // load tokenizer
   if (model_type == ModelType::LLAMA3){

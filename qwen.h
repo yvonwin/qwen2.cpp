@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cmath>
-#include "tiktoken.h"
+#include "tokenizer/tiktoken.h"
 
 #include <ggml.h>
 #include <iomanip>
