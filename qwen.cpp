@@ -324,6 +324,7 @@ auto RMSNorm::forward(ModelContext *ctx, ggml_tensor *input, float eps) const ->
 
 
 // ===== Tokenizer =====
+// Consider moving this code block to the 'tokenizer' directory for better organization.
 
 // parse tiktoken file
 static std::pair<std::string, int> _parse(const std::string &line) {
@@ -360,8 +361,6 @@ QwenTokenizer::QwenTokenizer(const std::string & tiktoken_path, const QwenConfig
     }
   }
 
-  // qwen
-  // std::cout<< "init qwen tokenizer" << std::endl;
   std::vector<std::string> special_tokens_s{"<|endoftext|>", "<|im_start|>", "<|im_end|>"};
   char buffer[14];
   for (size_t i = 0; i < 205; i++) { // 205 for extra control token
@@ -398,8 +397,6 @@ LlamaTokenizer::LlamaTokenizer(const std::string & tiktoken_path, const QwenConf
     }
   }
 
-  //llama3
-  // std::cout<< "init llama3 tokenizer" << std::endl;
   std::vector<std::string> special_tokens_s{
             "<|begin_of_text|>",
             "<|end_of_text|>",
@@ -412,9 +409,9 @@ LlamaTokenizer::LlamaTokenizer(const std::string & tiktoken_path, const QwenConf
             "<|reserved_special_token_4|>",
             "<|eot_id|>",  // end of turn
   };
-  char buffer[14];
-  for (size_t i = 5; i < 250; i++) {
-    snprintf(buffer, 14, "<|reserved_special_token_%zu|>", i);
+  char buffer[31];
+  for (size_t i = 5; i < 251; i++) {
+    snprintf(buffer, 31, "<|reserved_special_token_%zu|>", i);
     special_tokens_s.push_back(buffer);
   }
 
@@ -464,7 +461,7 @@ std::string QwenTokenizer::build_prompt(const std::vector<ChatMessage> &messages
 
   std::ostringstream oss_prompt;
 
-  // chatml:
+  // chatml template example
   // <|im_start|>system
   // You are a helpful assistant.<|im_end|>
   // <|im_start|>user
@@ -493,7 +490,7 @@ std::string LlamaTokenizer::build_prompt(const std::vector<ChatMessage> &message
 
   std::ostringstream oss_prompt;
 
-  // llama3
+  // llama3 chat template example
   // <|begin_of_text|><|start_header_id|>system<|end_header_id|>
 
   // You are a helpful assistant.<|eot_id|><|start_header_id|>user<|end_header_id|>
@@ -1083,8 +1080,7 @@ Llama3ForCausalLM::Llama3ForCausalLM(const Llama3Config &config)
   ctx_.ctx_kv = make_unique_ggml_context(ctx_kv_size + 1 * MB, nullptr, false); // 1MB extra for MPS
 
 
-  transformer = LlamaModel(&ctx_, config);  // failed here
-    //  std::cout << "hello here2" << std::endl; 
+  transformer = LlamaModel(&ctx_, config);
   lm_head = Linear(&ctx_, config.hidden_size, config.vocab_size, false);
   
 
@@ -1180,7 +1176,6 @@ auto QwenForCausalLM::forward_graph_compute(const std::vector<int> &input_ids, i
   ggml_tensor *lm_logits = forward(&ctx_, curr_input_ids, n_past, n_ctx, is_decoding);
   lm_logits->backend = GGML_BACKEND_CPU;
   // lm_logits->backend = GGML_BACKEND_TYPE_CPU; //newer ggml
-
 
   ggml_build_forward_expand(ctx_.gf, lm_logits);
 #ifdef GGML_USE_METAL
@@ -1473,7 +1468,6 @@ auto Llama3ForCausalLM::forward(
   ggml_tensor *lm_logits = lm_head.forward(ctx, transformer_outputs);
   return lm_logits;
 }
-
 
 
 // ===== pipeline =====

@@ -257,6 +257,7 @@ struct GenerationConfig {
         top_p(top_p), temperature(temperature), repetition_penalty(repetition_penalty), num_threads(num_threads) {}
 };
 
+// for sample
 struct TokenIdScore {
   int id;
   float score;
