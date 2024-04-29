@@ -6,6 +6,8 @@ from typing import Any, Dict, Iterator, List, Optional, Union
 import qwen_cpp._C as _C
 from qwen_cpp._C import ChatMessage
 
+__version__ = "0.1.6"
+
 @dataclass
 class DeltaMessage:
     role: str
