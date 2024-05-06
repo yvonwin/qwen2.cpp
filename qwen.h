@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cmath>
 #include "tokenizer/tiktoken.h"
+#include <cmath>
 
 #include <ggml.h>
 #include <iomanip>
@@ -26,7 +26,8 @@ class QwenTokenizer;
 
 static constexpr size_t MB = 1024 * 1024;
 
-static const std::string PAT_STR = R"((?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?:$|[^\S])|\s+)";
+static const std::string PAT_STR =
+    R"((?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?:$|[^\S])|\s+)";
 
 class LogMessageFatal {
   public:
@@ -39,8 +40,8 @@ class LogMessageFatal {
 };
 
 #define QWEN_THROW ::qwen::LogMessageFatal(__FILE__, __LINE__).stream()
-#define QWEN_CHECK(cond) \
-    if (!(cond)) \
+#define QWEN_CHECK(cond)                                                                                               \
+    if (!(cond))                                                                                                       \
     QWEN_THROW << "check failed (" #cond ") "
 
 ggml_tensor *tensor_assign_buffers(ggml_tensor *tensor);
@@ -53,61 +54,57 @@ auto get_num_physical_cores() -> int;
 auto get_default_num_threads() -> int;
 
 struct ggml_context_deleter_t {
-  auto operator()(ggml_context *ctx) const noexcept -> void { ggml_free(ctx); }
+    auto operator()(ggml_context *ctx) const noexcept -> void { ggml_free(ctx); }
 };
 
 using unique_ggml_context_t = std::unique_ptr<ggml_context, ggml_context_deleter_t>;
 
-static inline auto make_unique_ggml_context(
-  size_t mem_size, void *mem_buffer, bool no_alloc
-) -> unique_ggml_context_t {
-  return unique_ggml_context_t(ggml_init({mem_size, mem_buffer, no_alloc}));
+static inline auto make_unique_ggml_context(size_t mem_size, void *mem_buffer, bool no_alloc) -> unique_ggml_context_t {
+    return unique_ggml_context_t(ggml_init({mem_size, mem_buffer, no_alloc}));
 }
 
 #ifdef GGML_USE_METAL
 struct ggml_metal_context_deleter_t {
-  auto operator()(ggml_metal_context *ctx) const noexcept -> void { ggml_metal_free(ctx); }
+    auto operator()(ggml_metal_context *ctx) const noexcept -> void { ggml_metal_free(ctx); }
 };
 
 using unique_ggml_metal_context_t = std::unique_ptr<ggml_metal_context, ggml_metal_context_deleter_t>;
 
-static inline auto make_unique_ggml_metal_context(
-  int n_cb
-) -> unique_ggml_metal_context_t {
-  return unique_ggml_metal_context_t(ggml_metal_init(n_cb));
+static inline auto make_unique_ggml_metal_context(int n_cb) -> unique_ggml_metal_context_t {
+    return unique_ggml_metal_context_t(ggml_metal_init(n_cb));
 }
 #endif
 
 struct uninitialized_char {
-  char m;
-  uninitialized_char() {}
+    char m;
+    uninitialized_char() {}
 };
 
 auto ggml_graph_compute_helper(std::vector<uninitialized_char> &buf, ggml_cgraph *graph, int n_threads) -> void;
 
 struct ModelContext {
-  ggml_type dtype;
-  unique_ggml_context_t ctx_w;  // weight
-  unique_ggml_context_t ctx_kv; // kv cache
-  unique_ggml_context_t ctx_b;  // buffer
+    ggml_type dtype;
+    unique_ggml_context_t ctx_w;  // weight
+    unique_ggml_context_t ctx_kv; // kv cache
+    unique_ggml_context_t ctx_b;  // buffer
 #ifdef GGML_USE_METAL
-  unique_ggml_metal_context_t ctx_metal;
+    unique_ggml_metal_context_t ctx_metal;
 #endif
-  ggml_cgraph *gf;
-  ggml_scratch scratch;
-  std::vector<uninitialized_char> compute_buffer; // BLAS buffer
-  std::vector<uninitialized_char> scratch_buffer; // intermediate tensor buffer
-  std::string_view weight_buffer;                 // mapped weight
-  std::vector<uninitialized_char> work_buffer;    // temporary buffer for graph computing
+    ggml_cgraph *gf;
+    ggml_scratch scratch;
+    std::vector<uninitialized_char> compute_buffer; // BLAS buffer
+    std::vector<uninitialized_char> scratch_buffer; // intermediate tensor buffer
+    std::string_view weight_buffer;                 // mapped weight
+    std::vector<uninitialized_char> work_buffer;    // temporary buffer for graph computing
 
-  auto init_device_context() -> void;
+    auto init_device_context() -> void;
 };
 
 class Embedding {
   public:
     Embedding() : weight(nullptr) {}
     Embedding(ModelContext *ctx, int num_embeddings, int embedding_dim)
-      : weight(ggml_new_tensor_2d(ctx->ctx_w.get(), ctx->dtype, embedding_dim, num_embeddings)) {}
+        : weight(ggml_new_tensor_2d(ctx->ctx_w.get(), ctx->dtype, embedding_dim, num_embeddings)) {}
 
     auto forward(ModelContext *ctx, ggml_tensor *input) const -> ggml_tensor *;
 
@@ -118,8 +115,8 @@ class Linear {
   public:
     Linear() : weight(nullptr), bias(nullptr) {}
     Linear(ModelContext *ctx, int in_features, int out_features, bool use_bias = false)
-      : weight(ggml_new_tensor_2d(ctx->ctx_w.get(), ctx->dtype, in_features, out_features)),
-        bias(use_bias ? ggml_new_tensor_1d(ctx->ctx_w.get(), GGML_TYPE_F32, out_features) : nullptr) {}
+        : weight(ggml_new_tensor_2d(ctx->ctx_w.get(), ctx->dtype, in_features, out_features)),
+          bias(use_bias ? ggml_new_tensor_1d(ctx->ctx_w.get(), GGML_TYPE_F32, out_features) : nullptr) {}
 
     auto in_features() const -> int { return weight->ne[0]; }
     auto out_features() const -> int { return weight->ne[1]; }
@@ -134,7 +131,7 @@ class RMSNorm {
   public:
     RMSNorm() : weight(nullptr), inplace(true) {}
     RMSNorm(ModelContext *ctx, int normalized_shape, bool inplace = true)
-      : weight(ggml_new_tensor_1d(ctx->ctx_w.get(), GGML_TYPE_F32, normalized_shape)), inplace(inplace) {}
+        : weight(ggml_new_tensor_1d(ctx->ctx_w.get(), GGML_TYPE_F32, normalized_shape)), inplace(inplace) {}
 
     auto forward(ModelContext *ctx, ggml_tensor *input, float eps = 1e-5f) const -> ggml_tensor *;
 
@@ -142,7 +139,7 @@ class RMSNorm {
     bool inplace;
 };
 
-class BaseStreamer{
+class BaseStreamer {
   public:
     virtual ~BaseStreamer() = default;
     virtual auto put(const std::vector<int> &output_ids) -> void = 0;
@@ -188,12 +185,12 @@ class PerfStreamer : public BaseStreamer {
     auto num_prompt_tokens() const -> int64_t { return num_prompt_tokens_; }
     auto prompt_total_time_us() const -> int64_t { return prompt_us_ - start_us_; }
     auto prompt_token_time_us() const -> int64_t {
-      return num_prompt_tokens() ? prompt_total_time_us() / num_prompt_tokens() : 0;
+        return num_prompt_tokens() ? prompt_total_time_us() / num_prompt_tokens() : 0;
     }
     auto num_output_tokens() const -> int64_t { return num_output_tokens_; }
     auto output_total_time_us() const -> int64_t { return end_us_ - prompt_us_; }
     auto output_token_time_us() const -> int64_t {
-      return num_output_tokens() ? output_total_time_us() / num_output_tokens() : 0;
+        return num_output_tokens() ? output_total_time_us() / num_output_tokens() : 0;
     }
 
   private:
@@ -224,9 +221,9 @@ class ModelLoader {
 
     template <typename T>
     auto read_basic() -> T {
-      T obj = *(T *)ptr;
-      ptr += sizeof(T);
-      return obj;
+        T obj = *(T *)ptr;
+        ptr += sizeof(T);
+        return obj;
     }
 
     auto read_string(size_t length) -> std::string;
@@ -242,109 +239,106 @@ class ModelLoader {
 // ===== generation =====
 
 struct GenerationConfig {
-  int max_length;
-  int max_context_length;
-  bool do_sample;
-  int top_k;
-  float top_p;
-  float temperature;
-  float repetition_penalty;
-  int num_threads;
+    int max_length;
+    int max_context_length;
+    bool do_sample;
+    int top_k;
+    float top_p;
+    float temperature;
+    float repetition_penalty;
+    int num_threads;
 
-  GenerationConfig(int max_length = 2048, int max_context_length = 512, bool do_sample = true, int top_k = 0,
-                   float top_p = 0.7, float temperature = 0.95, float repetition_penalty = 1.f, int num_threads = 0)
-      : max_length(max_length), max_context_length(max_context_length), do_sample(do_sample), top_k(top_k),
-        top_p(top_p), temperature(temperature), repetition_penalty(repetition_penalty), num_threads(num_threads) {}
+    GenerationConfig(int max_length = 2048, int max_context_length = 512, bool do_sample = true, int top_k = 0,
+                     float top_p = 0.7, float temperature = 0.95, float repetition_penalty = 1.f, int num_threads = 0)
+        : max_length(max_length), max_context_length(max_context_length), do_sample(do_sample), top_k(top_k),
+          top_p(top_p), temperature(temperature), repetition_penalty(repetition_penalty), num_threads(num_threads) {}
 };
 
 // for sample
 struct TokenIdScore {
-  int id;
-  float score;
+    int id;
+    float score;
 
-  TokenIdScore() = default;
-  TokenIdScore(int id, float score) : id(id), score(score) {}
+    TokenIdScore() = default;
+    TokenIdScore(int id, float score) : id(id), score(score) {}
 
-  auto operator<(const TokenIdScore &other) const -> bool { return score < other.score; }
-  auto operator>(const TokenIdScore &other) const -> bool { return score > other.score; }
+    auto operator<(const TokenIdScore &other) const -> bool { return score < other.score; }
+    auto operator>(const TokenIdScore &other) const -> bool { return score > other.score; }
 
-  friend auto operator<<(std::ostream &os, const TokenIdScore &self) -> std::ostream & {
-    return os << "TokenIdScore(id=" << self.id << ", score=" << self.score << ")";
-  }
+    friend auto operator<<(std::ostream &os, const TokenIdScore &self) -> std::ostream & {
+        return os << "TokenIdScore(id=" << self.id << ", score=" << self.score << ")";
+    }
 };
 
 // ===== Qwen1.5 =====
 
 enum class ModelType {
-    QWEN1 = 1,  // abort
+    QWEN1 = 1, // abort
     QWEN2 = 2,
     QWEN2MOE = 3,
     CODEQWEN = 4,
-    LLAMA3 = 5 
+    LLAMA3 = 5
 };
 
 struct QwenConfig {
-  // common attributes
-  ggml_type dtype;
-  int vocab_size;
-  int hidden_size;
-  int num_attention_heads;
-  int num_kv_heads;
-  int num_hidden_layers;
-  int intermediate_size;
-  // for sequence generation
-  int max_length;
-  // for tokenizer
-  int eos_token_id;
-  int pad_token_id;
-  int im_start_id;
-  int im_end_id;
+    // common attributes
+    ggml_type dtype;
+    int vocab_size;
+    int hidden_size;
+    int num_attention_heads;
+    int num_kv_heads;
+    int num_hidden_layers;
+    int intermediate_size;
+    // for sequence generation
+    int max_length;
+    // for tokenizer
+    int eos_token_id;
+    int pad_token_id;
+    int im_start_id;
+    int im_end_id;
 };
 
 struct QwenMoeConfig : QwenConfig {
-  int moe_intermediate_size;
-  int shared_expert_intermediate_size;
-  int num_experts;
-  int num_experts_per_tok;
-  int norm_topk_prob;
+    int moe_intermediate_size;
+    int shared_expert_intermediate_size;
+    int num_experts;
+    int num_experts_per_tok;
+    int norm_topk_prob;
 };
 
-struct Llama3Config : QwenConfig{
-  // float rope_theta;
+struct Llama3Config : QwenConfig {
+    // float rope_theta;
 };
 
+struct ChatMessage {
+    std::string role;
+    std::string content;
 
-struct ChatMessage{
-  std::string role;
-  std::string content;
+    static const std::string ROLE_USER;
+    static const std::string ROLE_ASSISTANT;
+    static const std::string ROLE_SYSTEM;
 
-  static const std::string ROLE_USER;
-  static const std::string ROLE_ASSISTANT;
-  static const std::string ROLE_SYSTEM;
+    ChatMessage() = default;
+    ChatMessage(std::string role, std::string content) : role(std::move(role)), content(std::move(content)) {}
 
-  ChatMessage() = default;
-  ChatMessage(std::string role, std::string content)
-      : role(std::move(role)), content(std::move(content)) {}
-
-  friend std::ostream &operator<<(std::ostream &os, const ChatMessage &self) {
-      os << "ChatMessage(role=" << std::quoted(self.role) << ", content=" << std::quoted(self.content);
-      return os << ")";
-  }
+    friend std::ostream &operator<<(std::ostream &os, const ChatMessage &self) {
+        os << "ChatMessage(role=" << std::quoted(self.role) << ", content=" << std::quoted(self.content);
+        return os << ")";
+    }
 };
 
 class QwenTokenizer {
   public:
-
-    QwenTokenizer(const std::string & tiktoken_path, const QwenConfig &config);
+    QwenTokenizer(const std::string &tiktoken_path, const QwenConfig &config);
 
     auto encode(const std::string &text, int max_length) const -> std::vector<int>;
 
-    auto decode(const std::vector<int> &ids) const -> std::string;  
+    auto decode(const std::vector<int> &ids) const -> std::string;
 
     virtual std::vector<int> encode_messages(const std::vector<ChatMessage> &messages, int max_length) const;
 
-    ChatMessage decode_message(const std::vector<int> &ids) const{
-       return {ChatMessage::ROLE_ASSISTANT, decode(ids)};
+    ChatMessage decode_message(const std::vector<int> &ids) const {
+        return {ChatMessage::ROLE_ASSISTANT, decode(ids)};
     };
 
     static std::string build_prompt(const std::vector<ChatMessage> &messages);
@@ -360,14 +354,13 @@ class QwenTokenizer {
     static void check_chat_messages(const std::vector<ChatMessage> &messages);
 };
 
-class LlamaTokenizer : public QwenTokenizer{
+class LlamaTokenizer : public QwenTokenizer {
   public:
-    LlamaTokenizer(const std::string & tiktoken_path, const QwenConfig &config);
+    LlamaTokenizer(const std::string &tiktoken_path, const QwenConfig &config);
 
     std::vector<int> encode_messages(const std::vector<ChatMessage> &messages, int max_length) const;
 
     static std::string build_prompt(const std::vector<ChatMessage> &messages);
-
 };
 
 class QwenAttention {
@@ -375,7 +368,8 @@ class QwenAttention {
     QwenAttention() : num_attention_heads(0), num_kv_heads(0) {}
     QwenAttention(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int max_length);
 
-    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const
+        -> ggml_tensor *;
 
     int num_attention_heads;
     int num_kv_heads;
@@ -387,12 +381,13 @@ class QwenAttention {
     ggml_tensor *v_cache; // [n_head, head_size, maxlen]
 };
 
-class LlamaAttention: public QwenAttention{
+class LlamaAttention : public QwenAttention {
   public:
     LlamaAttention() : num_attention_heads(0), num_kv_heads(0) {}
     LlamaAttention(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int max_length);
 
-    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const
+        -> ggml_tensor *;
 
     int num_attention_heads;
     int num_kv_heads;
@@ -407,10 +402,9 @@ class LlamaAttention: public QwenAttention{
 class QwenMLP {
   public:
     QwenMLP() = default;
-    QwenMLP(ModelContext * ctx, int hidden_size, int intermediate_size)
-      : gate_proj(ctx, hidden_size, intermediate_size, false),
-        up_proj(ctx, hidden_size, intermediate_size, false),
-        down_proj(ctx, intermediate_size, hidden_size, false) {}
+    QwenMLP(ModelContext *ctx, int hidden_size, int intermediate_size)
+        : gate_proj(ctx, hidden_size, intermediate_size, false), up_proj(ctx, hidden_size, intermediate_size, false),
+          down_proj(ctx, intermediate_size, hidden_size, false) {}
 
     auto forward(ModelContext *ctx, ggml_tensor *hidden_states) const -> ggml_tensor *;
 
@@ -419,49 +413,47 @@ class QwenMLP {
     Linear down_proj;
 };
 
-class Qwen2MoeSparseMoeBlock{
+class Qwen2MoeSparseMoeBlock {
   public:
-      Qwen2MoeSparseMoeBlock() = default;
-      Qwen2MoeSparseMoeBlock(ModelContext * ctx, int hidden_size, int intermediate_size, int moe_intermediate_size, int shared_expert_intermediate_size, int num_experts, int num_experts_per_tok)
-        :
-        gate(ctx, hidden_size, num_experts, false),
-        shared_expert(ctx, hidden_size, shared_expert_intermediate_size),
-        shared_expert_gate(ctx, hidden_size, 1, false),
-        norm_topk_prob(false)
+    Qwen2MoeSparseMoeBlock() = default;
+    Qwen2MoeSparseMoeBlock(ModelContext *ctx, int hidden_size, int intermediate_size, int moe_intermediate_size,
+                           int shared_expert_intermediate_size, int num_experts, int num_experts_per_tok)
+        : gate(ctx, hidden_size, num_experts, false), shared_expert(ctx, hidden_size, shared_expert_intermediate_size),
+          shared_expert_gate(ctx, hidden_size, 1, false), norm_topk_prob(false)
 
-      {
-          for (int i = 0; i < num_experts; i++)
-          {
-              experts.emplace_back(QwenMLP(ctx, hidden_size, moe_intermediate_size));
-              expert_gates.push_back(experts[i].gate_proj.weight);
-              expert_downs.push_back(experts[i].down_proj.weight);
-              expert_ups.push_back(experts[i].up_proj.weight);
-          }
-      }
+    {
+        for (int i = 0; i < num_experts; i++) {
+            experts.emplace_back(QwenMLP(ctx, hidden_size, moe_intermediate_size));
+            expert_gates.push_back(experts[i].gate_proj.weight);
+            expert_downs.push_back(experts[i].down_proj.weight);
+            expert_ups.push_back(experts[i].up_proj.weight);
+        }
+    }
 
-      auto forward(ModelContext *ctx, ggml_tensor *hidden_states, int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, int num_experts, int num_experts_per_tok) const
+        -> ggml_tensor *;
 
-      Linear gate;
-      std::vector<QwenMLP> experts;
-      std::vector<ggml_tensor *> expert_gates;
-      std::vector<ggml_tensor *> expert_ups;
-      std::vector<ggml_tensor *> expert_downs;
-      QwenMLP shared_expert;
-      Linear shared_expert_gate;
-      bool norm_topk_prob;
+    Linear gate;
+    std::vector<QwenMLP> experts;
+    std::vector<ggml_tensor *> expert_gates;
+    std::vector<ggml_tensor *> expert_ups;
+    std::vector<ggml_tensor *> expert_downs;
+    QwenMLP shared_expert;
+    Linear shared_expert_gate;
+    bool norm_topk_prob;
 };
-
 
 class QwenBlock {
   public:
     QwenBlock() = default;
-    QwenBlock(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int intermediate_size, int max_length)
-      : input_layernorm(ctx, hidden_size, false),
-        attn(ctx, hidden_size, num_attention_heads, num_kv_heads, max_length),
-        post_attention_layernorm(ctx, hidden_size, false),
-        mlp(ctx, hidden_size, intermediate_size) {}
+    QwenBlock(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int intermediate_size,
+              int max_length)
+        : input_layernorm(ctx, hidden_size, false),
+          attn(ctx, hidden_size, num_attention_heads, num_kv_heads, max_length),
+          post_attention_layernorm(ctx, hidden_size, false), mlp(ctx, hidden_size, intermediate_size) {}
 
-    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos,int n_past, int n_ctx) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const
+        -> ggml_tensor *;
 
     RMSNorm input_layernorm;
     QwenAttention attn;
@@ -469,22 +461,22 @@ class QwenBlock {
     QwenMLP mlp;
 };
 
-class LlamaBlock:public QwenBlock{
+class LlamaBlock : public QwenBlock {
   public:
     LlamaBlock() = default;
-    LlamaBlock(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int intermediate_size, int max_length)
-      : input_layernorm(ctx, hidden_size, false),
-        attn(ctx, hidden_size, num_attention_heads, num_kv_heads, max_length),
-        post_attention_layernorm(ctx, hidden_size, false),
-        mlp(ctx, hidden_size, intermediate_size) {}
+    LlamaBlock(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int intermediate_size,
+               int max_length)
+        : input_layernorm(ctx, hidden_size, false),
+          attn(ctx, hidden_size, num_attention_heads, num_kv_heads, max_length),
+          post_attention_layernorm(ctx, hidden_size, false), mlp(ctx, hidden_size, intermediate_size) {}
 
-    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos,int n_past, int n_ctx) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx) const
+        -> ggml_tensor *;
 
     RMSNorm input_layernorm;
     LlamaAttention attn;
     RMSNorm post_attention_layernorm;
     QwenMLP mlp;
-
 };
 
 struct BasicPositionIdsGenerator {
@@ -500,13 +492,17 @@ struct BasicPositionIdsGenerator {
 class QwenMoeBlock {
   public:
     QwenMoeBlock() = default;
-    QwenMoeBlock(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int intermediate_size, int moe_intermediate_size, int shared_expert_intermediate_size, int num_experts, int num_experts_per_tok, int max_length)
-      : input_layernorm(ctx, hidden_size, false),
-        attn(ctx, hidden_size, num_attention_heads, num_kv_heads, max_length),
-        post_attention_layernorm(ctx, hidden_size, false),
-        mlp(ctx, hidden_size, intermediate_size, moe_intermediate_size, shared_expert_intermediate_size, num_experts,num_experts_per_tok) {}
+    QwenMoeBlock(ModelContext *ctx, int hidden_size, int num_attention_heads, int num_kv_heads, int intermediate_size,
+                 int moe_intermediate_size, int shared_expert_intermediate_size, int num_experts,
+                 int num_experts_per_tok, int max_length)
+        : input_layernorm(ctx, hidden_size, false),
+          attn(ctx, hidden_size, num_attention_heads, num_kv_heads, max_length),
+          post_attention_layernorm(ctx, hidden_size, false),
+          mlp(ctx, hidden_size, intermediate_size, moe_intermediate_size, shared_expert_intermediate_size, num_experts,
+              num_experts_per_tok) {}
 
-    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx, int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *hidden_states, ggml_tensor *KQ_pos, int n_past, int n_ctx,
+                 int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
 
     RMSNorm input_layernorm;
     QwenAttention attn;
@@ -533,7 +529,8 @@ class QwenMoeModel {
     QwenMoeModel(ModelContext *ctx, const QwenMoeConfig &config);
 
     // Attention: These parameters should not be set to fixed values. I did this for quick implementation.
-    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, int num_experts, int num_experts_per_tok) const -> ggml_tensor *;
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, int num_experts,
+                 int num_experts_per_tok) const -> ggml_tensor *;
 
     Embedding embed_tokens;
     std::vector<QwenMoeBlock> layers;
@@ -541,7 +538,7 @@ class QwenMoeModel {
     BasicPositionIdsGenerator pos_ids_gen_;
 };
 
-class LlamaModel: public QwenModel{
+class LlamaModel : public QwenModel {
   public:
     LlamaModel() = default;
     LlamaModel(ModelContext *ctx, const Llama3Config &config);
@@ -560,18 +557,11 @@ class QwenForCausalLM {
     QwenForCausalLM(int test){};
     ~QwenForCausalLM();
 
-    auto generate_next_token(
-      const std::vector<int> &input_ids,
-      const GenerationConfig &gen_config,
-      int n_past,
-      int n_ctx
-    ) -> int;
+    auto generate_next_token(const std::vector<int> &input_ids, const GenerationConfig &gen_config, int n_past,
+                             int n_ctx) -> int;
 
-    auto generate(
-      const std::vector<int> &input_ids,
-      const GenerationConfig &gen_config,
-      BaseStreamer *streamer = nullptr
-    ) -> std::vector<int>;
+    auto generate(const std::vector<int> &input_ids, const GenerationConfig &gen_config,
+                  BaseStreamer *streamer = nullptr) -> std::vector<int>;
 
     // logits processor
     static auto sampling_repetition_penalty(float *first, float *last, const std::vector<int32_t> &input_ids,
@@ -585,58 +575,62 @@ class QwenForCausalLM {
 
     virtual void load(ModelLoader &loader);
 
-    virtual ggml_tensor * forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, bool is_decoding) const;
+    virtual ggml_tensor *forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx,
+                                 bool is_decoding) const;
 
-    auto forward_graph_compute(const std::vector<int> &input_ids, int n_past, int n_ctx,int n_threads, bool is_decoding)-> ggml_tensor*;
+    auto forward_graph_compute(const std::vector<int> &input_ids, int n_past, int n_ctx, int n_threads,
+                               bool is_decoding) -> ggml_tensor *;
 
-    static constexpr size_t MEM_SIZE     = 1280 * MB;  // 2k context
+    static constexpr size_t MEM_SIZE = 1280 * MB;     // 2k context
     static constexpr size_t SCRATCH_SIZE = 1280 * MB; // 2k context
 
     QwenConfig config;
     QwenModel transformer;
     Linear lm_head;
 
-    private:
-      ModelContext ctx_;
-      std::vector<std::pair<std::string, ggml_tensor *>> state_dict_;
-};
-
-class QwenMoeForCausalLM : public QwenForCausalLM {
-  public:
-    QwenMoeForCausalLM(const QwenMoeConfig &config);  // Declaration
-    ~QwenMoeForCausalLM();
-    // Override methods here if needed
-
-    auto load(ModelLoader &loader) -> void override;
-    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, bool is_decoding) const -> ggml_tensor * override;
-
-    static constexpr size_t MEM_SIZE = 812ull * MB;
-    static constexpr size_t SCRATCH_SIZE = 1844ull * MB;
-    QwenMoeConfig config;
-    QwenMoeModel transformer;
-  
   private:
     ModelContext ctx_;
     std::vector<std::pair<std::string, ggml_tensor *>> state_dict_;
 };
 
-class Llama3ForCausalLM : public QwenForCausalLM{
+class QwenMoeForCausalLM : public QwenForCausalLM {
   public:
-    Llama3ForCausalLM(const Llama3Config &config);  // Declaration
+    QwenMoeForCausalLM(const QwenMoeConfig &config); // Declaration
+    ~QwenMoeForCausalLM();
+    // Override methods here if needed
+
+    auto load(ModelLoader &loader) -> void override;
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, bool is_decoding) const
+        -> ggml_tensor * override;
+
+    static constexpr size_t MEM_SIZE = 812ull * MB;
+    static constexpr size_t SCRATCH_SIZE = 1844ull * MB;
+    QwenMoeConfig config;
+    QwenMoeModel transformer;
+
+  private:
+    ModelContext ctx_;
+    std::vector<std::pair<std::string, ggml_tensor *>> state_dict_;
+};
+
+class Llama3ForCausalLM : public QwenForCausalLM {
+  public:
+    Llama3ForCausalLM(const Llama3Config &config); // Declaration
     ~Llama3ForCausalLM();
     // Override methods here if needed
 
     auto load(ModelLoader &loader) -> void override;
-    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, bool is_decoding) const -> ggml_tensor * override;
+    auto forward(ModelContext *ctx, ggml_tensor *input_ids, int n_past, int n_ctx, bool is_decoding) const
+        -> ggml_tensor * override;
 
-    static constexpr size_t MEM_SIZE     = 2000 * MB;  // 2k context
+    static constexpr size_t MEM_SIZE = 2000 * MB;     // 2k context
     static constexpr size_t SCRATCH_SIZE = 2000 * MB; // 2k context
     Llama3Config config;
     LlamaModel transformer;
-  
+
   private:
     ModelContext ctx_;
-    std::vector<std::pair<std::string, ggml_tensor *>> state_dict_; 
+    std::vector<std::pair<std::string, ggml_tensor *>> state_dict_;
 };
 
 // ===== pipeline =====
@@ -648,8 +642,8 @@ class Pipeline {
     auto generate(const std::vector<int> &input_ids, const GenerationConfig &gen_config,
                   BaseStreamer *streamer = nullptr) const -> std::vector<int>;
 
-    auto generate(const std::string &prompt, const GenerationConfig &gen_config,
-                  BaseStreamer *streamer = nullptr) const -> std::string;
+    auto generate(const std::string &prompt, const GenerationConfig &gen_config, BaseStreamer *streamer = nullptr) const
+        -> std::string;
 
     auto chat(const std::vector<ChatMessage> &messages, const GenerationConfig &gen_config,
               BaseStreamer *streamer = nullptr) const -> ChatMessage;

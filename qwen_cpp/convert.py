@@ -12,8 +12,7 @@ from typing import BinaryIO
 import torch
 from tabulate import tabulate
 from tqdm import tqdm
-from transformers import AutoTokenizer, AutoModelForCausalLM
-
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 GGML_QK8_0 = 32
 GGML_QK4_0 = 32
@@ -37,12 +36,13 @@ class GGMLType(Enum):
     Q5_1 = 7
     Q8_0 = 8
 
+
 class ModelType(Enum):
     QWEN1 = 1
     QWEN2 = 2
     QWEN2MOE = 3
     CODEQWEN = 4  # not use now
-    Llama3 = 5 
+    Llama3 = 5
 
 
 def quantize_q8_0(tensor: torch.Tensor) -> torch.CharTensor:
@@ -94,7 +94,7 @@ def quantize_q5_0(tensor: torch.Tensor) -> torch.CharTensor:
     max_values = torch.take_along_dim(tensor, abs_max_indices, dim=-1)
     scale = max_values / -16
     tensor = (tensor / scale + 16).round().clamp(min=0, max=31).char()
-    qs = (tensor[:, :16] & 0x0F) | (tensor[: 16:] << 4)
+    qs = (tensor[:, :16] & 0x0F) | (tensor[:16:] << 4)
     qh = torch.zeros(tensor.shape[:-1], dtype=torch.int32)
     for i in range(32):
         qh |= ((tensor[:, i] & 0x10) >> 4).int() << i
@@ -227,16 +227,21 @@ class QwenConverter:
         ]
         dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
 
+
 class Llama3Converter:
     """
     qkv has no bias
     """
+
     MODEL_TYPE = ModelType.Llama3
+
     @classmethod
     def convert(cls, f, model, tokenizer, ggml_type):
         f.write(b"ggml")  # magic
         f.write(struct.pack("ii", cls.MODEL_TYPE.value, 1))  # model type & version
-        cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type) # generation_config is not use now.
+        cls.dump_config(
+            f, model.config, model.generation_config, tokenizer, ggml_type
+        )  # generation_config is not use now.
         cls.dump_model(f, model, ggml_type)
 
     @staticmethod
@@ -250,10 +255,12 @@ class Llama3Converter:
             config.num_hidden_layers,
             config.intermediate_size,
             config.max_position_embeddings,
-            config.eos_token_id,       # <|end_of_text|> 128001
-            config.eos_token_id, # llama3 no pad, so not use actually
-            config.bos_token_id, # <|begin_of_text|> 128000
-            generation_config.eos_token_id[1] if isinstance(generation_config.eos_token_id, list) else 128009 # <|eot_id|> 128009
+            config.eos_token_id,  # <|end_of_text|> 128001
+            config.eos_token_id,  # llama3 no pad, so not use actually
+            config.bos_token_id,  # <|begin_of_text|> 128000
+            generation_config.eos_token_id[1]
+            if isinstance(generation_config.eos_token_id, list)
+            else 128009,  # <|eot_id|> 128009
         ]
         f.write(struct.pack("i" * len(config_values), *config_values))
 
@@ -280,13 +287,17 @@ class Llama3Converter:
         # print(len(weight_names)) // 8b: 291
         dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
 
+
 class Qwen2Converter:
     MODEL_TYPE = ModelType.QWEN2
+
     @classmethod
     def convert(cls, f, model, tokenizer, ggml_type):
         f.write(b"ggml")  # magic
         f.write(struct.pack("ii", cls.MODEL_TYPE.value, 1))  # model type & version
-        cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type) # generation_config is not use now.
+        cls.dump_config(
+            f, model.config, model.generation_config, tokenizer, ggml_type
+        )  # generation_config is not use now.
         cls.dump_model(f, model, ggml_type)
 
     @staticmethod
@@ -300,10 +311,10 @@ class Qwen2Converter:
             config.num_hidden_layers,
             config.intermediate_size,
             tokenizer.model_max_length,
-            config.eos_token_id,                             # eos 151645
-            list(tokenizer.added_tokens_decoder.keys())[0], # pad 151643
-            list(tokenizer.added_tokens_decoder.keys())[1], # im_start 151644
-            list(tokenizer.added_tokens_decoder.keys())[2], # im_end 151645
+            config.eos_token_id,  # eos 151645
+            list(tokenizer.added_tokens_decoder.keys())[0],  # pad 151643
+            list(tokenizer.added_tokens_decoder.keys())[1],  # im_start 151644
+            list(tokenizer.added_tokens_decoder.keys())[2],  # im_end 151645
         ]
         f.write(struct.pack("i" * len(config_values), *config_values))
 
@@ -333,13 +344,17 @@ class Qwen2Converter:
         print(len(weight_names))
         dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
 
+
 class Qwen2MOEConverter:
     MODEL_TYPE = ModelType.QWEN2MOE
+
     @classmethod
     def convert(cls, f, model, tokenizer, ggml_type):
         f.write(b"ggml")  # magic
         f.write(struct.pack("ii", cls.MODEL_TYPE.value, 1))  # model type & version
-        cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type) # generation_config is not use now.
+        cls.dump_config(
+            f, model.config, model.generation_config, tokenizer, ggml_type
+        )  # generation_config is not use now.
         cls.dump_model(f, model, ggml_type)
 
     @staticmethod
@@ -353,15 +368,15 @@ class Qwen2MOEConverter:
             config.num_hidden_layers,
             config.intermediate_size,
             tokenizer.model_max_length,
-            config.eos_token_id,                             # eos 151645
-            list(tokenizer.added_tokens_decoder.keys())[0], # pad 151643
-            list(tokenizer.added_tokens_decoder.keys())[1], # im_start 151644
-            list(tokenizer.added_tokens_decoder.keys())[2], # im_end 151645
+            config.eos_token_id,  # eos 151645
+            list(tokenizer.added_tokens_decoder.keys())[0],  # pad 151643
+            list(tokenizer.added_tokens_decoder.keys())[1],  # im_start 151644
+            list(tokenizer.added_tokens_decoder.keys())[2],  # im_end 151645
             config.moe_intermediate_size,
             config.shared_expert_intermediate_size,
             config.num_experts,
             config.num_experts_per_tok,
-            1 if config.norm_topk_prob else 0,  
+            1 if config.norm_topk_prob else 0,
         ]
         f.write(struct.pack("i" * len(config_values), *config_values))
 
@@ -397,17 +412,21 @@ class Qwen2MOEConverter:
             "model.norm.weight",
             "lm_head.weight",
         ]
-        print(len(weight_names)) # 4659
+        print(len(weight_names))  # 4659
         dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
+
 
 class CodeQwenConverter:
     # This model has the same architecture as the base model 'qwen2'. However, the tokenizer has been changed from 'tiketoken' to 'sentencepiece'.
     MODEL_TYPE = ModelType.QWEN2
+
     @classmethod
     def convert(cls, f, model, tokenizer, ggml_type):
         f.write(b"ggml")  # magic
         f.write(struct.pack("ii", cls.MODEL_TYPE.value, 1))  # model type & version
-        cls.dump_config(f, model.config, model.generation_config, tokenizer, ggml_type) # generation_config is not use now.
+        cls.dump_config(
+            f, model.config, model.generation_config, tokenizer, ggml_type
+        )  # generation_config is not use now.
         cls.dump_model(f, model, ggml_type)
 
     @staticmethod
@@ -421,10 +440,10 @@ class CodeQwenConverter:
             config.num_hidden_layers,
             config.intermediate_size,
             config.seq_length,
-            generation_config.eos_token_id[0], # eos_token_id[2, 4]
-            generation_config.pad_token_id, # 92298
-            list(tokenizer.added_tokens_decoder.keys())[3],  #3  <|im_start|>
-            list(tokenizer.added_tokens_decoder.keys())[4],  #4  <|im_end|>
+            generation_config.eos_token_id[0],  # eos_token_id[2, 4]
+            generation_config.pad_token_id,  # 92298
+            list(tokenizer.added_tokens_decoder.keys())[3],  # 3  <|im_start|>
+            list(tokenizer.added_tokens_decoder.keys())[4],  # 4  <|im_end|>
         ]
         f.write(struct.pack("i" * len(config_values), *config_values))
 
@@ -454,6 +473,7 @@ class CodeQwenConverter:
         print(len(weight_names))
         dump_state_dict(f, weight_names, model.state_dict(), ggml_type)
 
+
 def convert(f: BinaryIO, model_name_or_path: str, dtype: str = "q4_0"):
     ggml_type = GGMLType[dtype.upper()]
 
@@ -471,23 +491,23 @@ def convert(f: BinaryIO, model_name_or_path: str, dtype: str = "q4_0"):
     # print(model.generation_config)
     # print(tokenizer.model_max_length)
 
-    if model.config.architectures[0]=="Qwen2ForCausalLM":
+    if model.config.architectures[0] == "Qwen2ForCausalLM":
         if "Code" not in model_name_or_path:
-            print('Convert Qwen1.5')
+            print("Convert Qwen1.5")
             Qwen2Converter.convert(f, model, tokenizer, ggml_type)
         else:
             print("Convert CodeQwen1.5")
             CodeQwenConverter.convert(f, model, tokenizer, ggml_type)
 
-    elif model.config.architectures[0]=="Qwen2MoeForCausalLM":
-        print('Convert Qwen1.5-Moe')
+    elif model.config.architectures[0] == "Qwen2MoeForCausalLM":
+        print("Convert Qwen1.5-Moe")
         Qwen2MOEConverter.convert(f, model, tokenizer, ggml_type)
 
-    elif model.config.architectures[0]=="LlamaForCausalLM":
+    elif model.config.architectures[0] == "LlamaForCausalLM":
         print("Convert Llama3")
         Llama3Converter.convert(f, model, tokenizer, ggml_type)
     else:
-        print('Warning: Qwen1 is not supported now')
+        print("Warning: Qwen1 is not supported now")
         QwenConverter.convert(f, model, tokenizer, ggml_type)
 
 
@@ -496,7 +516,7 @@ def main():
     parser.add_argument(
         "-i",
         "--model_name_or_path",
-        default="Qwen/Qwen1.5-1.8B-Chat", # Qwen/Qwen1.5-7B-Chat; meta-llama/Meta-Llama-3-8B-Instruct
+        default="Qwen/Qwen1.5-1.8B-Chat",  # Qwen/Qwen1.5-7B-Chat; meta-llama/Meta-Llama-3-8B-Instruct
         type=str,
         help="Model name or path used in AutoModel.from_pretrained",
     )

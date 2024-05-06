@@ -39,7 +39,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 file(GLOB CPP_SOURCES
   ${PROJECT_SOURCE_DIR}/*.h
-  ${PROJECT_SOURCE_DIR}/*.cpp)
+  ${PROJECT_SOURCE_DIR}/*.cpp
+  ${PROJECT_SOURCE_DIR}/tokenizer/*.cpp
+  ${PROJECT_SOURCE_DIR}/tokenizer/*.h)
 
 set_source_files_properties(${CPP_SOURCES} PROPERTIES COMPILE_FLAGS "-pedantic-errors")
 

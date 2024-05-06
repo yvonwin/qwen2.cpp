@@ -18,6 +18,7 @@ from sse_starlette.sse import EventSourceResponse
 
 logging.basicConfig(level=logging.INFO, format=r"%(asctime)s - %(module)s - %(levelname)s - %(message)s")
 
+
 class Settings(BaseSettings):
     model: str = "qwen2_1.8b-ggml.bin"
     tiktoken: str = "qwen.tiktoken"
@@ -54,9 +55,7 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     max_tokens: int = Field(default=4096, ge=0)
     model_config = {
-        "json_schema_extra": {
-            "examples": [{"model": "default-model", "messages": [{"role": "user", "content": "你好"}]}]
-        }
+        "json_schema_extra": {"examples": [{"model": "default-model", "messages": [{"role": "user", "content": "你好"}]}]}
     }
 
 

@@ -8,11 +8,13 @@ from qwen_cpp._C import ChatMessage
 
 __version__ = "0.1.6"
 
+
 @dataclass
 class DeltaMessage:
     role: str
     content: str
     token_ids: List[int]
+
 
 def _ensure_chat_message(message: Union[ChatMessage, Dict[str, Any]]) -> ChatMessage:
     if isinstance(message, ChatMessage):
@@ -22,6 +24,7 @@ def _ensure_chat_message(message: Union[ChatMessage, Dict[str, Any]]) -> ChatMes
     else:
         raise TypeError(f"expect message type to be ChatMessage or dict, but got {type(message)}")
     return chat_message
+
 
 class Pipeline(_C.Pipeline):
     def __init__(
@@ -69,6 +72,7 @@ class Pipeline(_C.Pipeline):
         if stream:
             return self._stream_chat(input_ids=input_ids, gen_config=gen_config)
         return self._sync_chat(input_ids=input_ids, gen_config=gen_config)
+
     def _generate(
         self,
         input_ids: List[int],
@@ -114,11 +118,11 @@ class Pipeline(_C.Pipeline):
                 self.model.config.im_end_id,
             ):
                 break
-    
+
     def _safe_decode(self, token_cache):
-        output = ''
+        output = ""
         # Temporary solution. https://github.com/QwenLM/qwen.cpp/issues/36
-        try:   
+        try:
             output = self.tokenizer.decode(token_cache)
         except:
             pass

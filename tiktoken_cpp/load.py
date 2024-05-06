@@ -15,9 +15,7 @@ def read_file(blobpath: str) -> bytes:
         try:
             import blobfile
         except ImportError as e:
-            raise ImportError(
-                "blobfile is not installed. Please install it by running `pip install blobfile`."
-            ) from e
+            raise ImportError("blobfile is not installed. Please install it by running `pip install blobfile`.") from e
         with blobfile.BlobFile(blobpath, "rb") as f:
             return f.read()
     # avoiding blobfile for public files helps avoid auth issues, like MFA prompts
@@ -56,9 +54,7 @@ def read_file_cached(blobpath: str) -> bytes:
     return contents
 
 
-def data_gym_to_mergeable_bpe_ranks(
-    vocab_bpe_file: str, encoder_json_file: str
-) -> dict[bytes, int]:
+def data_gym_to_mergeable_bpe_ranks(vocab_bpe_file: str, encoder_json_file: str) -> dict[bytes, int]:
     # NB: do not add caching to this function
     rank_to_intbyte = [b for b in range(2**8) if chr(b).isprintable() and chr(b) != " "]
 
@@ -103,9 +99,7 @@ def dump_tiktoken_bpe(bpe_ranks: dict[bytes, int], tiktoken_bpe_file: str) -> No
     try:
         import blobfile
     except ImportError as e:
-        raise ImportError(
-            "blobfile is not installed. Please install it by running `pip install blobfile`."
-        ) from e
+        raise ImportError("blobfile is not installed. Please install it by running `pip install blobfile`.") from e
     with blobfile.BlobFile(tiktoken_bpe_file, "wb") as f:
         for token, rank in sorted(bpe_ranks.items(), key=lambda x: x[1]):
             f.write(base64.b64encode(token) + b" " + str(rank).encode() + b"\n")
@@ -115,6 +109,5 @@ def load_tiktoken_bpe(tiktoken_bpe_file: str) -> dict[bytes, int]:
     # NB: do not add caching to this function
     contents = read_file_cached(tiktoken_bpe_file)
     return {
-        base64.b64decode(token): int(rank)
-        for token, rank in (line.split() for line in contents.splitlines() if line)
+        base64.b64decode(token): int(rank) for token, rank in (line.split() for line in contents.splitlines() if line)
     }

@@ -5,7 +5,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import AbstractSet, Collection, Literal, NoReturn, Optional, Union
 
 import regex
-
 from qwen_cpp._C import tiktoken_cpp as _tiktoken
 
 
@@ -40,9 +39,7 @@ class Encoding:
         self._mergeable_ranks = mergeable_ranks
         self._special_tokens = special_tokens
 
-        self.max_token_value = max(
-            max(mergeable_ranks.values()), max(special_tokens.values(), default=0)
-        )
+        self.max_token_value = max(max(mergeable_ranks.values()), max(special_tokens.values(), default=0))
         if explicit_n_vocab:
             assert len(mergeable_ranks) + len(special_tokens) == explicit_n_vocab
             assert self.max_token_value == explicit_n_vocab - 1
@@ -166,9 +163,7 @@ class Encoding:
         if not isinstance(disallowed_special, frozenset):
             disallowed_special = frozenset(disallowed_special)
 
-        encoder = functools.partial(
-            self.encode, allowed_special=allowed_special, disallowed_special=disallowed_special
-        )
+        encoder = functools.partial(self.encode, allowed_special=allowed_special, disallowed_special=disallowed_special)
         with ThreadPoolExecutor(num_threads) as e:
             return list(e.map(encoder, text))
 
@@ -190,9 +185,7 @@ class Encoding:
         """
         return self._core_bpe.decode(tokens)
 
-    def decode_batch(
-        self, batch: list[list[int]], *, errors: str = "replace", num_threads: int = 8
-    ) -> list[str]:
+    def decode_batch(self, batch: list[list[int]], *, errors: str = "replace", num_threads: int = 8) -> list[str]:
         """Decodes a batch (list of lists of tokens) into a list of strings."""
         decoder = functools.partial(self.decode, errors=errors)
         with ThreadPoolExecutor(num_threads) as e:
