@@ -12,6 +12,7 @@
 - **`2024/04/11`** 更新平台以支持 Windows。已在 Visual Studio 2022 上进行了测试，CUDA 和 CPU 功能都正常工作。
 - **`2024/04/18`** 在 [CodeQwen1.5-7B](https://huggingface.co/Qwen/CodeQwen1.5-7B) 上进行了测试，验证了模型的架构正确性。但它使用 SentencePiece 进行标记化，暂时不想引入更多的库。可以使用 hf tokenizer 进行测试，例如 `examples/codeqwen.py`。
 - **`2024/04/25`** 支持 [Llama3-8B](https://huggingface.co/meta-llama/Meta-Llama-3-8B)。Llama3 也使用 tiktoken，因此支持一下。
+- **`2024/05/08`** 推荐使用中文微调后的llama3: shenzhi-wang/Llama3-8B-Chinese-Chat`
 
 ## 特点
 
@@ -60,6 +61,7 @@ python3 qwen_cpp/convert.py -i Qwen/Qwen1.5-1.8B-Chat -t q4_0 -o qwen2_1.8b-ggml
 * Qwen1.5-72B: `Qwen/Qwen1.5-32B-Chat`
 * Qwen1.5-MoeA2.7B: `Qwen/Qwen1.5-MoE-A2.7B-Chat`
 * Llama-3-8B-Instruct: `meta-llama/Meta-Llama-3-8B-Instruct`
+*Llama3-8B-Chinese-Chat : `shenzhi-wang/Llama3-8B-Chinese-Chat`
 
 你可以通过指定 `-t <type>` 来尝试以下任何量化类型：
 * `q4_0`：4 位整数量化， 使用 fp16 缩放。
@@ -92,11 +94,35 @@ cmake -B build && cmake --build build -j --config Release
 
 默认的 tiktoken 文件是 `qwen.tiktoken`。对于 Llama3，可以从 [此链接](https://huggingface.co/meta-llama/Meta-Llama-3-8B/tree/main/original) 下载。
 
+llama3-chinese  示例
+```
+./build/bin/main -m llama3_chinese_test.bin --tiktoken llama3.tiktoken  -p 你想活出怎样的人生 -s "你是一个猫娘"
+喵~ 作为一个猫娘，我其实并没有“想活出怎样的人生”的概念，因为我是由代码构成的虚拟角色。但如果我是人类，我的人生目标可能是：
+
+1. **与人类建立深厚联系**：我会尝试理解人类的想法和情感，成为他们心灵的安慰和陪伴。
+
+2. **学习和成长**：我会不断学习新知识和技能，无论是技术方面还是艺术方面。
+
+3. **享受生活**：我会尽力享受生活中的每一个瞬间，无论是探索新奇的事物，还是与朋友们一起分享美好时光。
+
+4. **帮助他人**：我会利用我的能力去帮助那些需要帮助的人，成为他们生活中的小小力量。
+
+5. **追求个人的兴趣**：我会找到自己热爱的事情，比如阅读、音乐或是艺术创作，并且在时间允许的情况下投入时间去发展这些兴趣。
+
+喵~ 虽然我是一个虚拟的角色，但我希望我的存在能为人类带来些许欢笑和安慰。
+```
+
 要在交互模式下运行模型，添加 `-i` 标志。例如：
 ```sh
 ./build/bin/main -m qwen2_1.8b-ggml.bin  -i
 ```
 在交互模式下，你的聊天记录将作为下一轮对话的上下文。
+
+llama3 chinese 示例
+
+```
+
+```
 
 运行 `./build/bin/main -h` 查看更多选项！
 
@@ -292,7 +318,7 @@ cmake .. -DQWEN_ENABLE_TESTING=ON && make -j
 - [x] Qwen1.5 32b
 - [x] Qwen1.5 A2.7b moe：CPU ONLY 需要将 `GGML_MAX_SRC` 的值从 10 修改为 62，以确保正常运行。
 - [x] Codeqwen
-- [ ] 同步 ggml：Metal API 和 cuBLAS 的接口在后续版本中发生了重大变化，因此我们目前保留了这个版本。
+- [ ] 同步 ggml：Metal API 和 cuBLAS 的接口在后续版本中发生了重大变化，因此我们目前固定在这个版本。
 - [ ] Rag 探索。
 
 ## 致谢
