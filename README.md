@@ -63,6 +63,7 @@ The original model (`-i <model_name_or_path>`) can be a HuggingFace model name o
 * Qwen1.5-72B: `Qwen/Qwen1.5-32B-Chat`
 * Qwen1.5-MoeA2.7B: `Qwen/Qwen1.5-MoE-A2.7B-Chat`
 * Llama-3-8B-Instruct: `meta-llama/Meta-Llama-3-8B-Instruct`
+* Llama3-8B-Chinese-Chat : `shenzhi-wang/Llama3-8B-Chinese-Chat`
 
 You are free to try any of the below quantization types by specifying `-t <type>`:
 * `q4_0`: 4-bit integer quantization with fp16 scales.

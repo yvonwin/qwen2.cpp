@@ -61,7 +61,7 @@ python3 qwen_cpp/convert.py -i Qwen/Qwen1.5-1.8B-Chat -t q4_0 -o qwen2_1.8b-ggml
 * Qwen1.5-72B: `Qwen/Qwen1.5-32B-Chat`
 * Qwen1.5-MoeA2.7B: `Qwen/Qwen1.5-MoE-A2.7B-Chat`
 * Llama-3-8B-Instruct: `meta-llama/Meta-Llama-3-8B-Instruct`
-*Llama3-8B-Chinese-Chat : `shenzhi-wang/Llama3-8B-Chinese-Chat`
+* Llama3-8B-Chinese-Chat : `shenzhi-wang/Llama3-8B-Chinese-Chat`
 
 你可以通过指定 `-t <type>` 来尝试以下任何量化类型：
 * `q4_0`：4 位整数量化， 使用 fp16 缩放。
@@ -118,11 +118,6 @@ llama3-chinese  示例
 ```
 在交互模式下，你的聊天记录将作为下一轮对话的上下文。
 
-llama3 chinese 示例
-
-```
-
-```
 
 运行 `./build/bin/main -h` 查看更多选项！
 
