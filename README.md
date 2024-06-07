@@ -2,7 +2,7 @@
 
 [中文版](README_zh.md)
 
-This project is an independent C++ implementation of [Qwen1.5 family](https://github.com/QwenLM/Qwen1.5) and Llama3.
+This project is an independent C++ implementation of [Qwen2 family](https://github.com/QwenLM/Qwen2) and Llama3.
 
 ![](docs/main_demo.jpg)
 
@@ -14,6 +14,7 @@ This project is an independent C++ implementation of [Qwen1.5 family](https://gi
 - **`2024/04/11`** The platform has been updated to support Windows. It has been tested on Visual Studio 2022, and both CUDA and CPU functionalities are confirmed to work correctly.
 - **`2024/04/18`** Tested on [CodeQwen1.5-7B](https://huggingface.co/Qwen/CodeQwen1.5-7B) The model's architecture is verified to be correct. However, it uses SentencePiece for tokenization.You can test it with hf tokenizer like `examples/codeqwen.py`.
 - **`2024/04/25`** Support [Llama3-8B](https://huggingface.co/meta-llama/Meta-Llama-3-8B)  Llama3 utilizes tiktoken as well, hence it is supported.
+- **`2024/06/07`** Support [Qwen2](https://huggingface.co/Qwen/Qwen2-7B-Instruct)
 
 ## Features
 
@@ -26,7 +27,7 @@ Highlights:
 Support Matrix:
 * Hardwares: x86/arm CPU, NVIDIA GPU, Apple Silicon GPU
 * Platforms: Linux, MacOS, Winodws
-* Models: [Qwen1.5](https://github.com/QwenLM/Qwen1.5) family and Llama3
+* Models: [Qwen2](https://github.com/QwenLM/Qwen2) family and Llama3
 
 ## Test in colab
 
@@ -49,9 +50,9 @@ git submodule update --init --recursive
 
 **Quantize Model**
 
-Use `convert.py` to transform Qwen1.5 into quantized GGML format. For example, to convert the fp16 original model to q4_0 (quantized int4) GGML model, run:
+Use `convert.py` to transform Qwen2 into quantized GGML format. For example, to convert the fp16 original model to q4_0 (quantized int4) GGML model, run:
 ```sh
-python3 qwen_cpp/convert.py -i Qwen/Qwen1.5-1.8B-Chat -t q4_0 -o qwen2_1.8b-ggml.bin
+!python qwen_cpp/convert.py -i Qwen/Qwen2-1.5B-Instruct -t q4_0 -o Qwen2-1.5B-Instruct-ggml.bin
 ```
 
 The original model (`-i <model_name_or_path>`) can be a HuggingFace model name or a local path to your pre-downloaded model. Currently supported models are:
@@ -64,6 +65,7 @@ The original model (`-i <model_name_or_path>`) can be a HuggingFace model name o
 * Qwen1.5-MoeA2.7B: `Qwen/Qwen1.5-MoE-A2.7B-Chat`
 * Llama-3-8B-Instruct: `meta-llama/Meta-Llama-3-8B-Instruct`
 * Llama3-8B-Chinese-Chat : `shenzhi-wang/Llama3-8B-Chinese-Chat`
+* Qwen2-7B-Instruct : `Qwen/Qwen2-7B-Instruct`
 
 You are free to try any of the below quantization types by specifying `-t <type>`:
 * `q4_0`: 4-bit integer quantization with fp16 scales.
@@ -96,7 +98,7 @@ The default tiktoken file is `qwen.tiktoken`. For Llama3, download it from [this
 
 To run the model in interactive mode, add the `-i` flag. For example:
 ```sh
-./build/bin/main -m qwen2_1.8b-ggml.bin  -i
+./build/bin/main -m Qwen2-1.5B-Instruct-ggml.bin  -i
 ```
 In interactive mode, your chat history will serve as the context for the next-round conversation.
 

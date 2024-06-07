@@ -1,6 +1,6 @@
 # qwen2.cpp
 
-这个项目是 [Qwen1.5 家族](https://github.com/QwenLM/Qwen1.5)和Llama3 的独立 C++ 实现。
+这个项目是 [Qwen2 家族](https://github.com/QwenLM/Qwen2)和Llama3 的独立 C++ 实现。
 
 ![](docs/main_demo.jpg)
 
@@ -13,6 +13,7 @@
 - **`2024/04/18`** 在 [CodeQwen1.5-7B](https://huggingface.co/Qwen/CodeQwen1.5-7B) 上进行了测试，验证了模型的架构正确性。但它使用 SentencePiece 进行标记化，暂时不想引入更多的库。可以使用 hf tokenizer 进行测试，例如 `examples/codeqwen.py`。
 - **`2024/04/25`** 支持 [Llama3-8B](https://huggingface.co/meta-llama/Meta-Llama-3-8B)。Llama3 也使用 tiktoken，因此支持一下。
 - **`2024/05/08`** 推荐使用中文微调后的llama3: shenzhi-wang/Llama3-8B-Chinese-Chat`
+- **`2024/06/07`** 模型结构基本没变化，所以支持[Qwen2](https://huggingface.co/Qwen/Qwen2-7B-Instruct)
 
 ## 特点
 
@@ -25,7 +26,7 @@
 支持矩阵：
 * 硬件：x86/arm CPU、NVIDIA GPU、Apple Silicon GPU
 * 平台：Linux、MacOS、Windows
-* 模型：[Qwen1.5](https://github.com/QwenLM/Qwen1.5) 家族和 Llama3
+* 模型：[Qwen2](https://github.com/QwenLM/Qwen2) 家族和 Llama3
 
 ## 在 Colab 中测试
 
@@ -62,6 +63,7 @@ python3 qwen_cpp/convert.py -i Qwen/Qwen1.5-1.8B-Chat -t q4_0 -o qwen2_1.8b-ggml
 * Qwen1.5-MoeA2.7B: `Qwen/Qwen1.5-MoE-A2.7B-Chat`
 * Llama-3-8B-Instruct: `meta-llama/Meta-Llama-3-8B-Instruct`
 * Llama3-8B-Chinese-Chat : `shenzhi-wang/Llama3-8B-Chinese-Chat`
+* Qwen2-7B-Instruct : `Qwen/Qwen2-7B-Instruct`
 
 你可以通过指定 `-t <type>` 来尝试以下任何量化类型：
 * `q4_0`：4 位整数量化， 使用 fp16 缩放。
@@ -114,7 +116,7 @@ llama3-chinese  示例
 
 要在交互模式下运行模型，添加 `-i` 标志。例如：
 ```sh
-./build/bin/main -m qwen2_1.8b-ggml.bin  -i
+./build/bin/main -m Qwen2-1.5B-Instruct-ggml.bin  -i
 ```
 在交互模式下，你的聊天记录将作为下一轮对话的上下文。
 
